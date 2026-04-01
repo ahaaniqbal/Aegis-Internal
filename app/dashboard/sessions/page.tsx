@@ -164,13 +164,13 @@ function SessionCard({
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-xs">
               {Number(session.allows) > 0 && (
-                <span className="text-success">{session.allows} allow</span>
+                <span className="text-accent">{session.allows} allow</span>
               )}
               {Number(session.denies) > 0 && (
                 <span className="text-destructive">{session.denies} deny</span>
               )}
               {Number(session.rewrites) > 0 && (
-                <span className="text-amber-500">{session.rewrites} rewrite</span>
+                <span className="text-amber-400">{session.rewrites} rewrite</span>
               )}
             </div>
             {isExpanded ? (
@@ -220,7 +220,7 @@ function SessionCard({
                 </span>
                 <Link
                   href={`/dashboard?session=${session.session_id}`}
-                  className="text-foreground/60 hover:text-foreground transition-colors"
+                  className="text-accent hover:underline"
                 >
                   View all runs
                 </Link>

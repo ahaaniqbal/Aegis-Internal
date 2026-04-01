@@ -8,17 +8,17 @@ interface MetricCardProps {
 
 const variantColors: Record<string, string> = {
   default: 'text-foreground',
-  allow: 'text-success',
+  allow: 'text-accent',
   deny: 'text-destructive',
-  rewrite: 'text-amber-500',
-  approval: 'text-foreground/70',
+  rewrite: 'text-amber-400',
+  approval: 'text-muted-foreground',
 };
 
 export default function MetricCard({ label, value, variant = 'default' }: MetricCardProps) {
   return (
     <div className="rounded-md border border-border bg-card p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold tabular-nums ${variantColors[variant]}`}>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${variantColors[variant]}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
       </p>
     </div>

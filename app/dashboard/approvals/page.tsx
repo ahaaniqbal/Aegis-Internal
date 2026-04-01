@@ -126,7 +126,7 @@ export default function ApprovalsPage() {
             onClick={() => setStatusFilter('pending')}
             className={`rounded-md border px-3 py-1.5 transition-colors ${
               statusFilter === 'pending'
-                ? 'border-amber-500 bg-amber-500/10 text-amber-600'
+                ? 'border-amber-400 bg-amber-400/10 text-amber-400'
                 : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
@@ -136,7 +136,7 @@ export default function ApprovalsPage() {
             onClick={() => setStatusFilter('approved')}
             className={`rounded-md border px-3 py-1.5 transition-colors ${
               statusFilter === 'approved'
-                ? 'border-success bg-success/10 text-success'
+                ? 'border-accent bg-accent/10 text-accent'
                 : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
           >
@@ -240,7 +240,7 @@ export default function ApprovalsPage() {
                       <button
                         onClick={() => handleAction(approval.id, false)}
                         disabled={isActioning}
-                        className="flex items-center gap-1.5 rounded-md bg-success px-3 py-1.5 text-sm font-medium text-white hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Check className="h-4 w-4" />
                         Approve

@@ -7,8 +7,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      {/* offset for mobile top bar (h-12) and desktop sidebar (w-56) */}
-      <main className="min-h-screen pt-12 lg:ml-56 lg:pt-0">{children}</main>
+      {/* offset for mobile top bar (h-14) and desktop sidebar (w-60) */}
+      <main className="min-h-screen pt-14 lg:ml-60 lg:pt-0">{children}</main>
     </div>
   );
 }

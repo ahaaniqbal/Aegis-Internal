@@ -34,7 +34,7 @@ export default function JsonViewer({ data, collapsed = true }: JsonViewerProps) 
           onClick={handleCopy}
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? <Check className="h-3.5 w-3.5 text-accent" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>

@@ -150,7 +150,7 @@ export default function SettingsPage() {
       <div className="p-6">
         {error && <div className="mb-4"><ErrorBanner message={error} onDismiss={() => setError(null)} /></div>}
         {success && (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-success/20 bg-success/10 px-3 py-2 text-sm text-success">
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-accent/20 bg-accent/10 px-3 py-2 text-sm text-accent">
             <Check className="h-4 w-4" />
             {success}
           </div>
@@ -307,7 +307,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {['Protected Branch Denial', 'Freeze Window Enforcement', 'Mandatory PR Flow', 'Secret Detection'].map((policy) => (
                         <div key={policy} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
-                          <Check className="h-4 w-4 text-success" />
+                          <Check className="h-4 w-4 text-accent" />
                           {policy}
                         </div>
                       ))}

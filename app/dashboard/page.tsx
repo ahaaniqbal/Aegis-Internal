@@ -27,7 +27,6 @@ export default function DashboardPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    // Don't fetch until user is resolved
     if (!user?.id) return;
 
     setLoading(true);
@@ -46,12 +45,10 @@ export default function DashboardPage() {
     }
   }, [user?.id]);
 
-  // Trigger fetch when user becomes available
   useEffect(() => {
     if (user?.id) {
       fetchData();
     } else if (!userLoading) {
-      // User finished loading but is null/unauthenticated
       setLoading(false);
     }
   }, [user?.id, userLoading]);
@@ -75,7 +72,6 @@ export default function DashboardPage() {
     return matchesSearch && matchesDecision;
   });
 
-  // Show spinner while user auth is resolving OR data is loading
   if (userLoading || loading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -118,7 +114,7 @@ export default function DashboardPage() {
               action={
                 <Link
                   href="/onboarding"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:bg-foreground/90"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-foreground px-3 text-sm font-medium text-background hover:bg-foreground/90"
                 >
                   Set up agent
                 </Link>
@@ -133,16 +129,16 @@ export default function DashboardPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Search..."
+                  placeholder="Search runs..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full rounded-md border border-border bg-muted py-1.5 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:border-foreground/40 focus:outline-none"
+                  className="h-8 w-full rounded-md border border-border bg-background py-1.5 pl-9 pr-3 text-sm placeholder:text-muted-foreground"
                 />
               </div>
               <select
                 value={decisionFilter}
                 onChange={(e) => setDecisionFilter(e.target.value)}
-                className="rounded-md border border-border bg-muted px-3 py-1.5 text-sm focus:border-foreground/40 focus:outline-none"
+                className="h-8 rounded-md border border-border bg-background px-3 text-sm"
               >
                 <option value="all">All decisions</option>
                 <option value="ALLOW">Allow</option>
@@ -156,14 +152,14 @@ export default function DashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-muted/50 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Agent</th>
-                    <th className="px-4 py-2 font-medium">Tool</th>
-                    <th className="px-4 py-2 font-medium">Summary</th>
-                    <th className="px-4 py-2 font-medium">Repository</th>
-                    <th className="px-4 py-2 font-medium">Branch</th>
-                    <th className="px-4 py-2 font-medium">Decision</th>
-                    <th className="px-4 py-2 font-medium">Time</th>
+                  <tr className="border-b border-border bg-muted/30 text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-3 font-medium">Agent</th>
+                    <th className="px-4 py-3 font-medium">Tool</th>
+                    <th className="px-4 py-3 font-medium">Summary</th>
+                    <th className="px-4 py-3 font-medium">Repository</th>
+                    <th className="px-4 py-3 font-medium">Branch</th>
+                    <th className="px-4 py-3 font-medium">Decision</th>
+                    <th className="px-4 py-3 font-medium">Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -204,7 +200,7 @@ function RunRow({
     <>
       <tr
         onClick={onToggle}
-        className="cursor-pointer border-b border-border hover:bg-muted/30"
+        className="cursor-pointer border-b border-border transition-colors hover:bg-muted/30"
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
@@ -244,7 +240,7 @@ function RunRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={7} className="border-b border-border bg-muted/30 px-4 py-4">
+          <td colSpan={7} className="border-b border-border bg-muted/20 px-4 py-4">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
                 <p className="mb-1 text-xs text-muted-foreground">Full Summary</p>
@@ -259,7 +255,7 @@ function RunRow({
                   <p className="text-xs text-muted-foreground">Session</p>
                   <Link
                     href={`/dashboard/sessions?id=${run.session_id}`}
-                    className="font-mono text-foreground/70 hover:text-foreground hover:underline"
+                    className="font-mono text-accent hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {run.session_id?.substring(0, 8)}...

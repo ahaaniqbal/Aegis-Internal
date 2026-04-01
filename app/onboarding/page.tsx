@@ -31,16 +31,16 @@ function StepIndicator({ current }: { current: number }) {
             <div className="flex flex-col items-center gap-1.5">
               <div
                 className={[
-                  'relative flex h-9 w-9 items-center justify-center rounded-full border text-xs font-medium transition-all duration-300',
-                  done ? 'border-foreground/30 bg-foreground text-background' : '',
-                  active ? 'border-foreground/60 bg-foreground/10 text-foreground ring-4 ring-foreground/10' : '',
+                  'relative flex h-8 w-8 items-center justify-center rounded-full border text-xs font-medium transition-all duration-300',
+                  done ? 'border-accent bg-accent text-white' : '',
+                  active ? 'border-foreground bg-foreground text-background' : '',
                   pending ? 'border-border bg-transparent text-muted-foreground' : '',
                 ].join(' ')}
               >
                 {done ? (
                   <Check className="h-4 w-4" strokeWidth={2.5} />
                 ) : (
-                  <Icon className={`h-3.5 w-3.5 ${active ? 'opacity-100' : 'opacity-40'}`} />
+                  <Icon className={`h-3.5 w-3.5 ${active ? 'opacity-100' : 'opacity-40'}`} strokeWidth={1.5} />
                 )}
               </div>
               <span
@@ -59,7 +59,7 @@ function StepIndicator({ current }: { current: number }) {
             {idx < STEPS.length - 1 && (
               <div className="relative mx-1 mb-5 h-px w-6 bg-border sm:mx-2 sm:w-12">
                 <div
-                  className="absolute inset-y-0 left-0 bg-foreground/40 transition-all duration-500"
+                  className="absolute inset-y-0 left-0 bg-accent transition-all duration-500"
                   style={{ width: s.number < current ? '100%' : '0%' }}
                 />
               </div>
@@ -171,11 +171,8 @@ export default function OnboardingPage() {
     const interval = setInterval(async () => {
       setChecking(true);
       try {
-
         const uname = user?.username || username;
-        const uid = user?.id; // Capture the ID
-
-        // Ensure BOTH uname and uid exist before calling the API
+        const uid = user?.id;
         if (!uname || !uid) return;
         const result = await api.getRecentActionCount(uid, uname);
         if (result[0] && Number(result[0].count) > 0) setVerified(true);
@@ -207,7 +204,7 @@ export default function OnboardingPage() {
   }, null, 2);
 
   const permOptions: Array<{ value: 'allow' | 'deny' | 'require_approval'; label: string; activeClass: string }> = [
-    { value: 'allow', label: 'Allow', activeClass: 'bg-success/20 text-success' },
+    { value: 'allow', label: 'Allow', activeClass: 'bg-accent/20 text-accent' },
     { value: 'require_approval', label: 'Approval', activeClass: 'bg-foreground/10 text-foreground' },
     { value: 'deny', label: 'Deny', activeClass: 'bg-destructive/20 text-destructive' },
   ];
@@ -219,9 +216,9 @@ export default function OnboardingPage() {
     { id: 'custom', label: 'Other' },
   ];
 
-  const inputClass = 'w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-foreground/40 focus:outline-none';
+  const inputClass = 'w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground';
   const primaryBtn = 'flex items-center justify-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-40 transition-all';
-  const ghostBtn = 'flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all';
+  const ghostBtn = 'flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all';
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-background px-4 py-10 sm:py-14">
@@ -229,11 +226,11 @@ export default function OnboardingPage() {
 
       <div className="w-full max-w-lg">
 
-        {/* ── Step 1 ── */}
+        {/* Step 1 */}
         {step === 1 && (
           <div className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
-              <h1 className="text-base font-semibold text-foreground">Connect GitHub</h1>
+              <h1 className="text-sm font-medium text-foreground">Connect GitHub</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">Aegis needs access to your repositories.</p>
             </div>
             <div className="space-y-4 p-5">
@@ -243,30 +240,30 @@ export default function OnboardingPage() {
                 </div>
               )}
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">GitHub Username</label>
+                <label className="mb-1.5 block text-xs text-muted-foreground">GitHub Username</label>
                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="octocat" className={inputClass} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">GitHub User ID</label>
+                <label className="mb-1.5 block text-xs text-muted-foreground">GitHub User ID</label>
                 <input type="text" value={githubId} onChange={(e) => setGithubId(e.target.value)} placeholder="12345678" className={inputClass} />
                 <p className="mt-1 text-xs text-muted-foreground">Find yours at api.github.com/users/YOUR_USERNAME</p>
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Email</label>
+                <label className="mb-1.5 block text-xs text-muted-foreground">Email</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={inputClass} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Personal Access Token</label>
+                <label className="mb-1.5 block text-xs text-muted-foreground">Personal Access Token</label>
                 <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="ghp_xxxx" className={inputClass} />
               </div>
               <div className="rounded-md border border-border bg-muted/30 p-3">
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Required token scopes</p>
+                <p className="mb-1.5 text-xs text-muted-foreground">Required token scopes</p>
                 <ul className="space-y-1 text-xs text-muted-foreground">
                   <li><code className="font-mono text-foreground/80">repo</code> &mdash; Full control of repositories</li>
                   <li><code className="font-mono text-foreground/80">read:org</code> &mdash; Read org membership</li>
                   <li><code className="font-mono text-foreground/80">workflow</code> &mdash; Update workflows</li>
                 </ul>
-                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground transition-colors">
+                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline">
                   Create token <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
@@ -278,11 +275,11 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ── Step 2 ── */}
+        {/* Step 2 */}
         {step === 2 && (
           <div className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
-              <h1 className="text-base font-semibold text-foreground">Sync Repositories</h1>
+              <h1 className="text-sm font-medium text-foreground">Sync Repositories</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">Discover repositories with your token.</p>
             </div>
             <div className="p-5">
@@ -293,14 +290,14 @@ export default function OnboardingPage() {
               ) : (
                 <>
                   <div className="mb-3 flex items-center gap-2 text-sm text-foreground">
-                    <Check className="h-4 w-4 text-success" />
+                    <Check className="h-4 w-4 text-accent" />
                     {repos.length} repositories found
                   </div>
                   <div className="max-h-64 space-y-1 overflow-y-auto">
                     {repos.map((repo) => (
                       <div key={repo.full_name} className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
                         <span className="min-w-0 flex-1 truncate">{repo.full_name}</span>
-                        <span className="text-xs text-success">Allow</span>
+                        <span className="text-xs text-accent">Allow</span>
                       </div>
                     ))}
                   </div>
@@ -318,17 +315,17 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ── Step 3 ── */}
+        {/* Step 3 */}
         {step === 3 && (
           <div className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
-              <h1 className="text-base font-semibold text-foreground">Configure Permissions</h1>
+              <h1 className="text-sm font-medium text-foreground">Configure Permissions</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">Set access levels for each repository.</p>
             </div>
             <div className="p-5">
               <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
                 <div className="rounded-md border border-border bg-muted/30 px-2 py-2 text-center">
-                  <span className="block font-medium text-success">Allow</span>
+                  <span className="block font-medium text-accent">Allow</span>
                   <span className="text-muted-foreground">Auto-execute</span>
                 </div>
                 <div className="rounded-md border border-border bg-muted/30 px-2 py-2 text-center">
@@ -378,11 +375,11 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* ── Step 4 ── */}
+        {/* Step 4 */}
         {step === 4 && (
           <div className="rounded-md border border-border bg-card">
             <div className="border-b border-border px-5 py-4">
-              <h1 className="text-base font-semibold text-foreground">Connect Agent</h1>
+              <h1 className="text-sm font-medium text-foreground">Connect Agent</h1>
               <p className="mt-0.5 text-sm text-muted-foreground">Add Aegis to your MCP configuration.</p>
             </div>
             <div className="p-5">
@@ -408,74 +405,52 @@ export default function OnboardingPage() {
                 {activeTab === 'claude' && <ol className="space-y-1"><li>1. Open Claude Code settings</li><li>2. Navigate to MCP Servers</li><li>3. Add the config above</li><li>4. Restart Claude Code</li></ol>}
                 {activeTab === 'cursor' && <ol className="space-y-1"><li>1. Open Settings &rarr; Features &rarr; MCP</li><li>2. Click Add MCP Server</li><li>3. Paste the config</li></ol>}
                 {activeTab === 'windsurf' && <ol className="space-y-1"><li>1. Open ~/.codeium/windsurf/mcp_config.json</li><li>2. Add the aegis-github server</li></ol>}
-                {activeTab === 'custom' && <p>Point your MCP server URL to https://app.runaegis.co/sse with header <code className="text-foreground/80">user_id: {String(user?.github_user_id || githubId)}</code></p>}
+                {activeTab === 'custom' && <p>Point your MCP client to the URL shown above with your user_id header.</p>}
               </div>
-
-              {/* Connection status */}
-              <div className="mt-3 flex items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-sm">
+              <div className="mt-4 flex items-center gap-3">
+                {checking && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 {verified ? (
-                  <>
-                    <span className="h-2 w-2 rounded-full bg-success" />
-                    <span className="text-foreground">Agent connected</span>
-                  </>
+                  <div className="flex items-center gap-2 text-sm text-accent">
+                    <Check className="h-4 w-4" />
+                    Agent connected
+                  </div>
                 ) : (
-                  <>
-                    <span className={`h-2 w-2 rounded-full ${checking ? 'bg-foreground/50 animate-pulse' : 'bg-muted-foreground/40'}`} />
-                    <span className="text-muted-foreground">Waiting for first action&hellip;</span>
-                  </>
+                  <span className="text-xs text-muted-foreground">Waiting for agent connection...</span>
                 )}
               </div>
-
               <div className="mt-5 flex gap-2">
                 <button onClick={() => setStep(3)} className={ghostBtn}>
                   <ChevronLeft className="h-4 w-4" /> Back
                 </button>
-                <button onClick={() => setStep(5)} className={`${primaryBtn} flex-1`}>
+                <button onClick={() => setStep(5)} disabled={!verified} className={`${primaryBtn} flex-1`}>
                   Continue <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-              {!verified && (
-                <button onClick={() => setStep(5)} className="mt-2 w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  Skip for now
-                </button>
-              )}
             </div>
           </div>
         )}
 
-        {/* ── Step 5 ── */}
+        {/* Step 5 */}
         {step === 5 && (
           <div className="rounded-md border border-border bg-card text-center">
-            <div className="px-6 py-10">
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-border bg-muted">
-                <Shield className="h-7 w-7 text-foreground" />
+            <div className="px-5 py-8">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+                <Check className="h-6 w-6 text-accent" />
               </div>
-              <h1 className="text-xl font-semibold text-foreground">Aegis is active</h1>
-              <p className="mt-1.5 text-sm text-muted-foreground">Your agents are now governed.</p>
-
-              <div className="mx-auto mt-7 grid max-w-xs grid-cols-3 gap-3">
-                {[
-                  { value: actionCount, label: 'actions' },
-                  { value: repos.length, label: 'repos' },
-                  { value: 0, label: 'incidents' },
-                ].map(({ value, label }) => (
-                  <div key={label} className="rounded-md border border-border bg-muted/30 p-3">
-                    <p className="text-xl font-semibold tabular-nums text-foreground">{value}</p>
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                  </div>
-                ))}
-              </div>
-
+              <h1 className="text-lg font-medium text-foreground">You&apos;re all set</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Aegis is now monitoring your agent actions.</p>
+              {actionCount > 0 && (
+                <p className="mt-2 text-sm text-muted-foreground">{actionCount} actions logged so far.</p>
+              )}
               <button
                 onClick={() => router.push('/dashboard')}
-                className={`${primaryBtn} mx-auto mt-7`}
+                className={`${primaryBtn} mt-6 w-full`}
               >
                 Go to Dashboard <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

@@ -1,13 +1,13 @@
 'use client';
 
 const styles: Record<string, { bg: string; text: string; label: string }> = {
-  ALLOW: { bg: 'bg-success/10', text: 'text-success', label: 'Allow' },
+  ALLOW: { bg: 'bg-accent/10', text: 'text-accent', label: 'Allow' },
   DENY: { bg: 'bg-destructive/10', text: 'text-destructive', label: 'Deny' },
-  REWRITE: { bg: 'bg-amber-500/10', text: 'text-amber-500', label: 'Rewrite' },
-  REQUIRE_APPROVAL: { bg: 'bg-foreground/8', text: 'text-foreground/70', label: 'Approval' },
+  REWRITE: { bg: 'bg-amber-400/10', text: 'text-amber-400', label: 'Rewrite' },
+  REQUIRE_APPROVAL: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Approval' },
   ALLOW_ERROR: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Error' },
-  PENDING: { bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Pending' },
-  APPROVED: { bg: 'bg-success/10', text: 'text-success', label: 'Approved' },
+  PENDING: { bg: 'bg-amber-400/10', text: 'text-amber-400', label: 'Pending' },
+  APPROVED: { bg: 'bg-accent/10', text: 'text-accent', label: 'Approved' },
   REJECTED: { bg: 'bg-destructive/10', text: 'text-destructive', label: 'Rejected' },
 };
 

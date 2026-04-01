@@ -1,17 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import "./globals.css";
 
-const inter = Inter({ 
+const geistSans = Geist({ 
   subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
+  variable: '--font-geist-sans',
 });
 
-const jetbrainsMono = JetBrains_Mono({ 
+const geistMono = Geist_Mono({ 
   subsets: ['latin'],
-  variable: '--font-jetbrains',
-  display: 'swap',
+  variable: '--font-geist-mono',
 });
 
 export const metadata: Metadata = {
@@ -20,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0b',
+  themeColor: '#000000',
   colorScheme: 'dark',
 };
 
@@ -30,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`h-full ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`h-full ${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-full bg-background text-foreground font-sans antialiased">
         {children}
       </body>
