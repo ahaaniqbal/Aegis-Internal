@@ -25,10 +25,10 @@
   --secondary-foreground: #ededed;
 
   /* Accent - Vercel blue for secondary actions */
-  --accent: #0070f3;
+  --accent: #47A8FF;
 
   /* Status */
-  --success: #0070f3;
+  --success: #47A8FF;
   --destructive: #ff4444;
 
   /* Radius - Vercel uses subtle rounding */
@@ -73,7 +73,7 @@ body {
 /* Focus ring - Vercel uses subtle blue ring */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px rgba(0, 112, 243, 0.4);
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px rgba(71, 168, 255, 0.4);
 }
 
 /* Transitions - Vercel uses fast, subtle transitions */
@@ -102,5 +102,5 @@ input::placeholder, textarea::placeholder {
 
 /* Selection */
 ::selection {
-  background: rgba(0, 112, 243, 0.3);
+  background: rgba(71, 168, 255, 0.3);
 }

@@ -4,10 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Shield,
+  Zap,
   Activity,
-  Layers,
-  Bell,
+  Clock,
+  CheckCircle2,
   BookOpen,
   FileText,
   Settings,
@@ -20,9 +20,9 @@ import { useUser } from '@/lib/hooks';
 import { getInitials } from '@/lib/utils';
 
 const nav = [
-  { name: 'Runs', href: '/dashboard', icon: Activity },
-  { name: 'Sessions', href: '/dashboard/sessions', icon: Layers },
-  { name: 'Approvals', href: '/dashboard/approvals', icon: Bell },
+  { name: 'Runs', href: '/dashboard', icon: Zap },
+  { name: 'Sessions', href: '/dashboard/sessions', icon: Activity },
+  { name: 'Approvals', href: '/dashboard/approvals', icon: CheckCircle2 },
   { name: 'Policies', href: '/dashboard/policies', icon: BookOpen },
   { name: 'Audit Trail', href: '/dashboard/audit', icon: FileText },
 ];
@@ -42,8 +42,8 @@ export default function Sidebar() {
       {/* Logo / Team Selector */}
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <button className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted transition-colors">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-foreground">
-            <Shield className="h-3.5 w-3.5 text-background" />
+          <div className="flex h-6 w-6 items-center justify-center rounded bg-accent">
+            <Zap className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-sm font-medium text-foreground">Aegis</span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -131,8 +131,8 @@ export default function Sidebar() {
       {/* Mobile top bar */}
       <div className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background px-4 lg:hidden">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-foreground">
-            <Shield className="h-3.5 w-3.5 text-background" />
+          <div className="flex h-6 w-6 items-center justify-center rounded bg-accent">
+            <Zap className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-sm font-medium text-foreground">Aegis</span>
         </div>
