@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from "react";
+import { Eye, EyeOff, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-export default function ResetPasswordPage() {
+function ResetPasswordPage() {
   const searchParams = useSearchParams();
-  const token = searchParams.get('token');
+  const token = searchParams.get("token");
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,28 +23,31 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const validateToken = async () => {
       if (!token) {
-        setError('Invalid or missing reset link');
+        setError("Invalid or missing reset link");
         setValidating(false);
         return;
       }
 
       try {
-        const res = await fetch(`http://localhost:8000/auth/validate-reset-token?token=${encodeURIComponent(token)}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
+        const res = await fetch(
+          `http://localhost:8000/auth/validate-reset-token?token=${encodeURIComponent(token)}`,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        });
-        
+        );
+
         if (res.ok) {
           setTokenValid(true);
           setError(null);
         } else {
           const data = await res.json();
-          setError(data.detail || 'Reset link has expired or is invalid');
+          setError(data.detail || "Reset link has expired or is invalid");
         }
       } catch (err) {
-        setError('Failed to validate reset link');
+        setError("Failed to validate reset link");
       } finally {
         setValidating(false);
       }
@@ -55,17 +58,17 @@ export default function ResetPasswordPage() {
 
   const validatePasswords = () => {
     if (!password || !confirmPassword) {
-      setError('Please fill in all fields');
+      setError("Please fill in all fields");
       return false;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError("Password must be at least 8 characters");
       return false;
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       return false;
     }
 
@@ -75,7 +78,7 @@ export default function ResetPasswordPage() {
     const hasNumbers = /\d/.test(password);
 
     if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
-      setError('Password must contain uppercase, lowercase, and numbers');
+      setError("Password must contain uppercase, lowercase, and numbers");
       return false;
     }
 
@@ -94,9 +97,9 @@ export default function ResetPasswordPage() {
 
     try {
       const res = await fetch(`http://localhost:8000/auth/reset-password`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           token,
@@ -106,19 +109,19 @@ export default function ResetPasswordPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || 'Failed to reset password');
+        throw new Error(data.detail || "Failed to reset password");
       }
 
       setSuccess(true);
-      setPassword('');
-      setConfirmPassword('');
+      setPassword("");
+      setConfirmPassword("");
 
       // Redirect to login after 2 seconds
       setTimeout(() => {
-        window.location.href = '/auth';
+        window.location.href = "/auth";
       }, 2000);
     } catch (err: any) {
-      setError(err.message || 'Failed to reset password. Please try again.');
+      setError(err.message || "Failed to reset password. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -153,7 +156,8 @@ export default function ResetPasswordPage() {
               Invalid Reset Link
             </h1>
             <p className="text-center text-sm text-muted-foreground mb-6">
-              {error || 'This password reset link is invalid or has expired. Please request a new one.'}
+              {error ||
+                "This password reset link is invalid or has expired. Please request a new one."}
             </p>
             <Link
               href="/auth"
@@ -179,7 +183,8 @@ export default function ResetPasswordPage() {
               Password Reset Successful
             </h1>
             <p className="text-center text-sm text-muted-foreground mb-6">
-              Your password has been successfully reset. You'll be redirected to login shortly.
+              Your password has been successfully reset. You'll be redirected to
+              login shortly.
             </p>
             <Link
               href="/auth"
@@ -193,7 +198,8 @@ export default function ResetPasswordPage() {
     );
   }
 
-  const passwordsMatch = password && confirmPassword && password === confirmPassword;
+  const passwordsMatch =
+    password && confirmPassword && password === confirmPassword;
   const hasValidLength = password && password.length >= 8;
   const hasUpperCase = password && /[A-Z]/.test(password);
   const hasLowerCase = password && /[a-z]/.test(password);
@@ -223,13 +229,16 @@ export default function ResetPasswordPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* New Password Field */}
             <div>
-              <label htmlFor="password" className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label
+                htmlFor="password"
+                className="block text-xs font-medium text-muted-foreground mb-1.5"
+              >
                 New Password
               </label>
               <div className="relative">
                 <input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -254,13 +263,16 @@ export default function ResetPasswordPage() {
 
             {/* Confirm Password Field */}
             <div>
-              <label htmlFor="confirm" className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label
+                htmlFor="confirm"
+                className="block text-xs font-medium text-muted-foreground mb-1.5"
+              >
                 Confirm Password
               </label>
               <div className="relative">
                 <input
                   id="confirm"
-                  type={showConfirm ? 'text' : 'password'}
+                  type={showConfirm ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => {
                     setConfirmPassword(e.target.value);
@@ -285,35 +297,71 @@ export default function ResetPasswordPage() {
 
             {/* Password Requirements */}
             <div className="mt-4 p-3 rounded-md bg-muted/50 border border-border">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Password requirements:</p>
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Password requirements:
+              </p>
               <ul className="space-y-1">
                 <li className="flex items-center gap-2 text-xs">
-                  <div className={`w-1.5 h-1.5 rounded-full ${hasValidLength ? 'bg-green-500' : 'bg-border'}`} />
-                  <span className={hasValidLength ? 'text-foreground' : 'text-muted-foreground'}>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${hasValidLength ? "bg-green-500" : "bg-border"}`}
+                  />
+                  <span
+                    className={
+                      hasValidLength
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }
+                  >
                     At least 8 characters
                   </span>
                 </li>
                 <li className="flex items-center gap-2 text-xs">
-                  <div className={`w-1.5 h-1.5 rounded-full ${hasUpperCase ? 'bg-green-500' : 'bg-border'}`} />
-                  <span className={hasUpperCase ? 'text-foreground' : 'text-muted-foreground'}>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${hasUpperCase ? "bg-green-500" : "bg-border"}`}
+                  />
+                  <span
+                    className={
+                      hasUpperCase ? "text-foreground" : "text-muted-foreground"
+                    }
+                  >
                     One uppercase letter
                   </span>
                 </li>
                 <li className="flex items-center gap-2 text-xs">
-                  <div className={`w-1.5 h-1.5 rounded-full ${hasLowerCase ? 'bg-green-500' : 'bg-border'}`} />
-                  <span className={hasLowerCase ? 'text-foreground' : 'text-muted-foreground'}>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${hasLowerCase ? "bg-green-500" : "bg-border"}`}
+                  />
+                  <span
+                    className={
+                      hasLowerCase ? "text-foreground" : "text-muted-foreground"
+                    }
+                  >
                     One lowercase letter
                   </span>
                 </li>
                 <li className="flex items-center gap-2 text-xs">
-                  <div className={`w-1.5 h-1.5 rounded-full ${hasNumbers ? 'bg-green-500' : 'bg-border'}`} />
-                  <span className={hasNumbers ? 'text-foreground' : 'text-muted-foreground'}>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${hasNumbers ? "bg-green-500" : "bg-border"}`}
+                  />
+                  <span
+                    className={
+                      hasNumbers ? "text-foreground" : "text-muted-foreground"
+                    }
+                  >
                     One number
                   </span>
                 </li>
                 <li className="flex items-center gap-2 text-xs">
-                  <div className={`w-1.5 h-1.5 rounded-full ${passwordsMatch ? 'bg-green-500' : 'bg-border'}`} />
-                  <span className={passwordsMatch ? 'text-foreground' : 'text-muted-foreground'}>
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full ${passwordsMatch ? "bg-green-500" : "bg-border"}`}
+                  />
+                  <span
+                    className={
+                      passwordsMatch
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }
+                  >
                     Passwords match
                   </span>
                 </li>
@@ -333,13 +381,13 @@ export default function ResetPasswordPage() {
               disabled={loading || !tokenValid}
               className="w-full rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-6"
             >
-              {loading ? 'Resetting Password...' : 'Reset Password'}
+              {loading ? "Resetting Password..." : "Reset Password"}
             </button>
           </form>
 
           <div className="mt-6 pt-6 border-t border-border">
             <p className="text-xs text-center text-muted-foreground">
-              Remember your password?{' '}
+              Remember your password?{" "}
               <Link
                 href="/auth"
                 className="text-foreground hover:underline font-medium"
@@ -351,5 +399,28 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="w-full max-w-md">
+            <div className="rounded-md border border-border bg-card p-6 sm:p-8">
+              <div className="flex justify-center mb-6">
+                <div className="w-8 h-8 border-2 border-border border-t-foreground rounded-full animate-spin" />
+              </div>
+              <p className="text-center text-sm text-muted-foreground">
+                Loading...
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordPage />
+    </Suspense>
   );
 }
