@@ -49,6 +49,7 @@ function parseDatetime(value: any): string | any {
   return value;
 }
 
+
 function parseRow(row: any, columns?: string[]): any {
   let obj: any = row;
   if (Array.isArray(row) && columns) {
@@ -168,6 +169,33 @@ export const api = {
     const rows = await getUserActions(userId);
     return aggregateSessions(rows);
   },
+
+  getRoomTools: (roomId: string, role: string, token: string) =>
+  fetch(`${API_BASE}/room/${roomId}/tools/${role}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(res => res.json()),
+
+updateRoomTools: (roomId: string, role: string, data: Record<string, boolean>, token: string) =>
+  fetch(`${API_BASE}/room/${roomId}/tools/${role}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ tools: data }),  // ← IMPORTANT: Wrap in { tools: ... }
+  })
+    .then(async (res) => {
+      const json = await res.json();
+      if (!res.ok) {
+  const message =
+    typeof json.detail === "string"
+      ? json.detail
+      : JSON.stringify(json.detail);
+
+  throw new Error(message || `HTTP ${res.status}`);
+}
+      return json;
+    }),
 
   getSessionActions: async (sessionId: string, userId?: string): Promise<SessionAction[]> => {
     // If we have userId, pull from cache to avoid an extra fetch
@@ -296,6 +324,7 @@ export const api = {
         github_user_id: user.github_user_id,
         username: user.username,
         github_pat: user.github_pat,
+        email: user.email,
       }),
     }).then((r) => r.json());
 
