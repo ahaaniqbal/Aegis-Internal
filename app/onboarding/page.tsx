@@ -116,8 +116,8 @@ const { email } = useEmail();
   const handleSync = async () => {
     setSyncing(true);
     try {
-      if (!user?.github_user_id || !user?.access_token) throw new Error('User not initialized');
-      const syncResponse = await api.syncRepos(user.github_user_id, user.access_token);
+      if (!user?.github_user_id || !user?.github_pat) throw new Error('User not initialized');
+      const syncResponse = await api.syncRepos(user.github_user_id, user.github_pat);
       if (!syncResponse.success) throw new Error(syncResponse.message || 'Sync failed');
       const reposResponse = await api.getRepos(user.id || '');
       if (reposResponse?.repos && Array.isArray(reposResponse.repos)) setRepos(reposResponse.repos);
