@@ -37,24 +37,23 @@ export default function RoomsPage() {
   const [submittingInvite, setSubmittingInvite] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [tools, setTools] = useState<Record<string, boolean>>({});
+  const [role, setRole] = useState<string>('DEVELOPER');
+  const [viewingRole, setViewingRole] = useState<string>('DEVELOPER');
 
-  useEffect(() => {
-    const syncAuthToken = () => {
-      const token = localStorage.getItem('access_token') || undefined;
-      setAuthToken(token);
-    };
-
-    syncAuthToken();
-    window.addEventListener('storage', syncAuthToken);
-
-    return () => {
-      window.removeEventListener('storage', syncAuthToken);
-    };
-  }, [user?.id]);
+  const getAuthToken = useCallback(() => {
+    const token = localStorage.getItem('access_token');
+    console.log('[RoomsPage] getAuthToken:', token ? 'Token exists' : 'No token found');
+    return token;
+  }, []);
 
   const fetchRooms = useCallback(async () => {
+    const authToken = getAuthToken();
+    console.log('[RoomsPage] fetchRooms called, authToken exists:', !!authToken);
+
     if (!authToken) {
       if (!userLoading) {
+        console.log('[RoomsPage] Clearing rooms - no auth token and not loading user');
         setRooms([]);
         setSelectedRoomId('');
         setSelectedRoom(null);
@@ -67,10 +66,13 @@ export default function RoomsPage() {
 
     setLoading(true);
     try {
+      console.log('[RoomsPage] Fetching rooms from API...');
       const roomsData = await api.getMyRooms(authToken);
+      console.log('[RoomsPage] Rooms fetched successfully:', roomsData);
       setRooms(roomsData);
 
       if (roomsData.length === 0) {
+        console.log('[RoomsPage] No rooms returned, clearing selection');
         setSelectedRoomId('');
         setSelectedRoom(null);
         setMembers([]);
@@ -78,40 +80,64 @@ export default function RoomsPage() {
       } else {
         const hasSelected = roomsData.some((room) => getRoomId(room) === selectedRoomId);
         if (!selectedRoomId || !hasSelected) {
-          setSelectedRoomId(getRoomId(roomsData[0]));
+          const firstRoomId = getRoomId(roomsData[0]);
+          console.log('[RoomsPage] Setting first room as selected:', firstRoomId);
+          setSelectedRoomId(firstRoomId);
         }
       }
 
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch rooms');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[RoomsPage] fetchRooms failed:', errorMsg);
+      setError(`Failed to fetch rooms: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
   }, [authToken, userLoading, selectedRoomId]);
 
   const loadRoomData = useCallback(async () => {
+    const authToken = getAuthToken();
+    console.log('[RoomsPage] loadRoomData called, selectedRoomId:', selectedRoomId, 'authToken exists:', !!authToken);
+
     if (!authToken || !selectedRoomId) {
+      console.log('[RoomsPage] loadRoomData skipped: missing auth token or room selection');
       setSelectedRoom(null);
       setMembers([]);
       setInvites([]);
+      setTools({});
       return;
     }
 
     try {
+      console.log('[RoomsPage] Loading room details for:', selectedRoomId);
       const [roomData, memberData, inviteData] = await Promise.all([
         api.getRoomDetails(selectedRoomId, authToken),
         api.getRoomMembers(selectedRoomId, authToken),
         api.getRoomInvites(selectedRoomId, authToken),
       ]);
+
+      // Find current user's role first
+      const currentMember = memberData.find((m) => m.user_id === user?.id);
+      const currentRole = currentMember?.role || 'DEVELOPER';
+      setRole(currentRole);
+
+      // Fetch tools for the role being viewed (any user can view any role's policies)
+      console.log('[RoomsPage] Fetching tools for role:', viewingRole);
+      const toolsData = await api.getRoomTools(selectedRoomId, viewingRole, authToken);
+      setTools(toolsData || {});
+
+      console.log('[RoomsPage] Room data loaded successfully:', { roomData, memberData, inviteData });
       setSelectedRoom(roomData);
       setMembers(memberData);
       setInvites(inviteData);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load room details');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[RoomsPage] loadRoomData failed:', errorMsg);
+      setError(`Failed to load room details: ${errorMsg}`);
     }
-  }, [selectedRoomId, authToken]);
+  }, [selectedRoomId, getAuthToken, user?.id, viewingRole]);
 
   useEffect(() => {
     fetchRooms();
@@ -120,6 +146,17 @@ export default function RoomsPage() {
   useEffect(() => {
     loadRoomData();
   }, [loadRoomData]);
+
+  // Effect: Reload tools when owner switches the viewed role
+  useEffect(() => {
+    const authToken = getAuthToken();
+    if (!authToken || !selectedRoomId || role !== 'OWNER') return;
+
+    console.log('[RoomsPage] Effect: Loading tools for viewing role:', viewingRole);
+    api.getRoomTools(selectedRoomId, viewingRole, authToken)
+      .then((toolsData) => setTools(toolsData || {}))
+      .catch((err) => console.error('[RoomsPage] Failed to load tools:', err));
+  }, [viewingRole, selectedRoomId, role, getAuthToken]);
 
   const { lastUpdated } = useAutoRefresh(fetchRooms, 30000);
 
@@ -135,39 +172,109 @@ export default function RoomsPage() {
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRepoId.trim() || !authToken) return;
+    const authToken = getAuthToken();
+    if (!newRepoId.trim() || !authToken) {
+      console.warn('[RoomsPage] handleCreateRoom: missing repo ID or auth token');
+      return;
+    }
 
     setSubmittingCreate(true);
     setSuccess(null);
     try {
+      console.log('[RoomsPage] Creating room with repo ID:', newRepoId);
       const created = await api.createRoom(newRepoId.trim(), authToken);
+      console.log('[RoomsPage] Room created successfully:', created);
       setNewRepoId('');
       setSuccess('Room created successfully');
       await fetchRooms();
       const roomId = getRoomId(created);
       if (roomId) {
+        console.log('[RoomsPage] Setting selected room to newly created:', roomId);
         setSelectedRoomId(roomId);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create room');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[RoomsPage] handleCreateRoom failed:', errorMsg);
+      setError(`Failed to create room: ${errorMsg}`);
     } finally {
       setSubmittingCreate(false);
     }
   };
 
+  const TOOL_GROUPS = {
+    Repository: [
+      'create_or_update_file',
+      'get_file_contents',
+      'list_repository_files',
+      'push_files',
+      'search_repositories',
+      'get_repository',
+    ],
+    'Issues & PR': [
+      'create_issue',
+      'get_issue',
+      'issue_read:get_comments',
+      'issue_read:get_sub_issues',
+      'list_issues',
+      'create_pull_request',
+      'get_pull_request',
+      'pull_request_read:get_comments',
+      'pull_request_read:get_review_comments',
+      'pull_request_read:get_reviews',
+    ],
+    Search: ['search_code', 'search_issues'],
+    Git: ['get_latest_commit', 'list_branches', 'create_branch'],
+  };
+
+  const toggleTool = async (tool: string, value: boolean) => {
+    const authToken = getAuthToken();
+    if (!authToken) {
+      console.warn('[RoomsPage] toggleTool: missing auth token');
+      return;
+    }
+
+    const targetRole = viewingRole;
+    const updated = { ...tools, [tool]: value };
+    const previousTools = tools;
+
+    // Optimistic update
+    setTools(updated);
+
+    try {
+      console.log('[RoomsPage] Updating tool policy for role:', targetRole, 'tool:', tool, 'value:', value);
+      await api.updateRoomTools(selectedRoomId, targetRole, updated, authToken);
+      console.log('[RoomsPage] Tool policy updated successfully');
+      setSuccess(`${tool} ${value ? 'allowed' : 'denied'}`);
+    } catch (err) {
+      console.error('[RoomsPage] toggleTool failed:', err);
+      // Rollback on failure
+      setTools(previousTools);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(`Failed to update tool policy: ${errorMsg}`);
+    }
+  };
+
   const handleJoinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinCode.trim() || !authToken) return;
+    const authToken = getAuthToken();
+    if (!joinCode.trim() || !authToken) {
+      console.warn('[RoomsPage] handleJoinRoom: missing join code or auth token');
+      return;
+    }
 
     setSubmittingJoin(true);
     setSuccess(null);
     try {
+      console.log('[RoomsPage] Joining room with code:', joinCode);
       await api.joinRoom(joinCode.trim(), authToken);
+      console.log('[RoomsPage] Joined room successfully');
       setJoinCode('');
       setSuccess('Joined room successfully');
       await fetchRooms();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to join room');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[RoomsPage] handleJoinRoom failed:', errorMsg);
+      setError(`Failed to join room: ${errorMsg}`);
     } finally {
       setSubmittingJoin(false);
     }
@@ -175,7 +282,11 @@ export default function RoomsPage() {
 
   const handleCreateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRoomId || !authToken) return;
+    const authToken = getAuthToken();
+    if (!selectedRoomId || !authToken) {
+      console.warn('[RoomsPage] handleCreateInvite: missing room ID or auth token');
+      return;
+    }
 
     setSubmittingInvite(true);
     setSuccess(null);
@@ -189,13 +300,17 @@ export default function RoomsPage() {
         payload.expires_at = new Date(inviteExpiresAt).toISOString();
       }
 
+      console.log('[RoomsPage] Creating invite with payload:', payload);
       await api.createRoomInvite(selectedRoomId, payload, authToken);
+      console.log('[RoomsPage] Invite created successfully');
       setInviteMaxUses('');
       setInviteExpiresAt('');
       setSuccess('Invite created successfully');
       await loadRoomData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create invite');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[RoomsPage] handleCreateInvite failed:', errorMsg);
+      setError(`Failed to create invite: ${errorMsg}`);
     } finally {
       setSubmittingInvite(false);
     }
@@ -203,9 +318,11 @@ export default function RoomsPage() {
 
   const copyInviteCode = async (code: string) => {
     try {
+      console.log('[RoomsPage] Copying invite code to clipboard');
       await navigator.clipboard.writeText(code);
       setSuccess('Invite code copied');
-    } catch {
+    } catch (err) {
+      console.error('[RoomsPage] Failed to copy invite code:', err);
       setError('Could not copy invite code');
     }
   };
@@ -386,6 +503,69 @@ export default function RoomsPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+
+              {/* Tool Policies Section */}
+              <div className="rounded-md border border-border bg-card p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">Tool Policies</h3>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground">View role:</label>
+                    <select
+                      value={viewingRole}
+                      onChange={(e) => setViewingRole(e.target.value)}
+                      className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground focus:border-foreground/40 focus:outline-none"
+                    >
+                      <option value="DEVELOPER">DEVELOPER</option>
+                      <option value="REVIEWER">REVIEWER</option>
+                      <option value="VIEWER">VIEWER</option>
+                    </select>
+                  </div>
+                </div>
+
+                {Object.entries(TOOL_GROUPS).map(([group, toolList]) => (
+                  <div key={group} className="mb-4">
+                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group}
+                    </h4>
+                    <div className="space-y-2">
+                      {toolList.map((tool) => {
+                        const isAllowed = tools[tool] === true;
+                        const isDenied = tools[tool] === false || tools[tool] === undefined;
+                        return (
+                          <div
+                            key={tool}
+                            className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+                          >
+                            <span className="font-mono text-xs text-foreground">{tool}</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => toggleTool(tool, true)}
+                                className={`rounded px-2 py-1 text-xs transition-colors ${
+                                  isAllowed
+                                    ? 'bg-green-600 text-white'
+                                    : 'border border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                                }`}
+                              >
+                                Allow
+                              </button>
+                              <button
+                                onClick={() => toggleTool(tool, false)}
+                                className={`rounded px-2 py-1 text-xs transition-colors ${
+                                  isDenied
+                                    ? 'bg-red-600 text-white'
+                                    : 'border border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                                }`}
+                              >
+                                Deny
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

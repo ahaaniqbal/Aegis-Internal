@@ -51,7 +51,7 @@ export default function SettingsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await api.saveUser({ github_user_id: user.github_user_id, username, email, access_token: token });
+      const updated = await api.saveUser({ github_user_id: user.github_user_id, username, email, github_pat: token });
       setUser(updated);
       setSuccess('Profile updated');
     } catch {

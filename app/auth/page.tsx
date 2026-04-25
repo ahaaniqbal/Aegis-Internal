@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useUser } from '@/lib/hooks';
+import { useUser, useEmail } from '@/lib/hooks';
 import { User } from '@/lib/types';
 
 type AuthMode = 'signin' | 'signup' | 'forgot';
@@ -27,6 +27,7 @@ export default function AuthPage() {
   // console.log('Using backend URL:', BACKEND_URL);
   const router = useRouter();
   const { setUser } = useUser();
+  const { email, setEmail } = useEmail();
   const [mode, setMode] = useState<AuthMode>('signup');
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | null>(null);
@@ -37,7 +38,6 @@ export default function AuthPage() {
   
   // Form fields
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   

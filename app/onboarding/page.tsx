@@ -7,7 +7,9 @@ import { api } from '@/lib/api';
 import { useUser, useOnboardingStep } from '@/lib/hooks';
 import { Repo } from '@/lib/types';
 import CopyButton from '@/components/ui/CopyButton';
+import { useEmail } from '@/lib/hooks';
 
+// In any component:
 const STEPS = [
   { number: 1, label: 'Connect', icon: GitBranch },
   { number: 2, label: 'Sync', icon: RefreshCw },
@@ -17,6 +19,7 @@ const STEPS = [
 ];
 
 function StepIndicator({ current }: { current: number }) {
+  
   return (
     <div className="mb-10 flex items-center justify-center px-2">
       {STEPS.map((s, idx) => {
@@ -75,6 +78,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { user, setUser } = useUser();
   const { step, setStep } = useOnboardingStep();
+const { email } = useEmail();
 
   const [username, setUsername] = useState(user?.username || '');
   const [githubId, setGithubId] = useState(String(user?.github_user_id || ''));
@@ -99,7 +103,7 @@ export default function OnboardingPage() {
     try {
       const githubUserIdNum = parseInt(githubId, 10);
       if (isNaN(githubUserIdNum)) { setStep1Error('GitHub User ID must be a number.'); setStep1Loading(false); return; }
-      const response = await api.saveUser({ github_user_id: githubUserIdNum, username, access_token: token });
+      const response = await api.saveUser({ github_user_id: githubUserIdNum, username, github_pat: token , email }); //<-email
       setUser(response);
       setStep(2);
     } catch {
