@@ -11,7 +11,7 @@ import {
   RoomInvite,
 } from './types';
 
-type SaveUserPayload = Pick<User, 'github_user_id' | 'username' | 'github_pat'> & {
+type SaveUserPayload = Pick<User, 'github_user_id' | 'username' | 'access_token'> & {
   email?: string;
 };
 
@@ -313,18 +313,13 @@ updateRoomTools: (roomId: string, role: string, data: Record<string, boolean>, t
   },
 
   saveUser: async (user: SaveUserPayload) => {
-    const jwt = localStorage.getItem('access_token');
     const createResponse = await fetch(`${API_BASE}/user`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${jwt}`,
-       },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         github_user_id: user.github_user_id,
         username: user.username,
-        github_pat: user.github_pat,
-        email: user.email,
+        access_token: user.access_token,
       }),
     }).then((r) => r.json());
 
@@ -371,7 +366,7 @@ updateRoomTools: (roomId: string, role: string, data: Record<string, boolean>, t
     }).then((r) => r.json()),
 
   getRepos: (user_id: string) =>
-    fetch(`${API_BASE}/repos/${encodeURIComponent(user_id)}`).then((r) => r.json()),
+    fetch(`${API_BASE}/repos/${user_id}`).then((r) => r.json()),
 
   setPermission: (
     user_id: string,
@@ -431,181 +426,99 @@ updateRoomTools: (roomId: string, role: string, data: Record<string, boolean>, t
     }
   },
 
-  // ── Room APIs ────────────────────────────────────────────────────────────────
-
-  getUserRepos: async (token: string): Promise<{ repo_id: string; name: string }[]> => {
-    console.log('[API] getUserRepos called');
-    const res = await fetch(`${API_BASE}/room/repos`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    console.log('[API] getUserRepos response received:', res.status);
-    if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] getUserRepos failed:', errorMsg);
-      throw new Error(`Failed to load repos: ${errorMsg}`);
-    }
-
-    const data = await res.json();
-    console.log('[API] getUserRepos data:', data);
-    return Array.isArray(data) ? data : [];
-  },
-
-  createRoom: async (repoId: string, token: string): Promise<RoomDetails> => {
-    console.log('[API] createRoom called with repoId:', repoId);
+  createRoom: async (repoId: string, token?: string): Promise<RoomDetails> => {
     const res = await fetch(`${API_BASE}/room/`, {
       method: 'POST',
       headers: getJsonHeaders(token),
       body: JSON.stringify({ repo_id: repoId }),
     });
 
-    console.log('[API] createRoom response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] createRoom failed:', errorMsg);
-      throw new Error(`Failed to create room: ${errorMsg}`);
+      throw new Error(`Failed to create room: ${await readErrorMessage(res)}`);
     }
 
-    const data = await res.json();
-    console.log('[API] createRoom data:', data);
-    return data;
+    return res.json();
   },
 
-  getMyRooms: async (token: string): Promise<RoomSummary[]> => {
-    console.log('[API] getMyRooms called');
+  getMyRooms: async (token?: string): Promise<RoomSummary[]> => {
     const res = await fetch(`${API_BASE}/room/`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
-    console.log('[API] getMyRooms response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] getMyRooms failed:', errorMsg);
-      throw new Error(`Failed to load rooms: ${errorMsg}`);
+      throw new Error(`Failed to load rooms: ${await readErrorMessage(res)}`);
     }
 
     const data = await res.json();
-    console.log('[API] getMyRooms data:', data);
     return Array.isArray(data) ? data : [];
   },
 
-  getRoomDetails: async (roomId: string, token: string): Promise<RoomDetails> => {
-    console.log('[API] getRoomDetails called with roomId:', roomId);
+  getRoomDetails: async (roomId: string, token?: string): Promise<RoomDetails> => {
     const res = await fetch(`${API_BASE}/room/${encodeURIComponent(roomId)}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
-    console.log('[API] getRoomDetails response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] getRoomDetails failed:', errorMsg);
-      throw new Error(`Failed to load room: ${errorMsg}`);
+      throw new Error(`Failed to load room: ${await readErrorMessage(res)}`);
     }
 
-    const data = await res.json();
-    console.log('[API] getRoomDetails data:', data);
-    return data;
+    return res.json();
   },
 
-  getRoomMembers: async (roomId: string, token: string): Promise<RoomMember[]> => {
-    console.log('[API] getRoomMembers called with roomId:', roomId);
+  getRoomMembers: async (roomId: string, token?: string): Promise<RoomMember[]> => {
     const res = await fetch(`${API_BASE}/room/${encodeURIComponent(roomId)}/members`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
-    console.log('[API] getRoomMembers response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] getRoomMembers failed:', errorMsg);
-      throw new Error(`Failed to load room members: ${errorMsg}`);
+      throw new Error(`Failed to load room members: ${await readErrorMessage(res)}`);
     }
 
     const data = await res.json();
-    console.log('[API] getRoomMembers data:', data);
     return Array.isArray(data) ? data : [];
   },
 
-  getRoomInvites: async (roomId: string, token: string): Promise<RoomInvite[]> => {
-    console.log('[API] getRoomInvites called with roomId:', roomId);
+  getRoomInvites: async (roomId: string, token?: string): Promise<RoomInvite[]> => {
     const res = await fetch(`${API_BASE}/room/${encodeURIComponent(roomId)}/invites`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
-    console.log('[API] getRoomInvites response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] getRoomInvites failed:', errorMsg);
-      throw new Error(`Failed to load room invites: ${errorMsg}`);
+      throw new Error(`Failed to load room invites: ${await readErrorMessage(res)}`);
     }
 
     const data = await res.json();
-    console.log('[API] getRoomInvites data:', data);
     return Array.isArray(data) ? data : [];
   },
 
   createRoomInvite: async (
     roomId: string,
     payload: { max_uses?: number; expires_at?: string },
-    token: string
+    token?: string
   ): Promise<RoomInvite> => {
-    console.log('[API] createRoomInvite called with roomId:', roomId, 'payload:', payload);
     const res = await fetch(`${API_BASE}/room/${encodeURIComponent(roomId)}/invite`, {
       method: 'POST',
       headers: getJsonHeaders(token),
       body: JSON.stringify(payload),
     });
 
-    console.log('[API] createRoomInvite response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] createRoomInvite failed:', errorMsg);
-      throw new Error(`Failed to create invite: ${errorMsg}`);
+      throw new Error(`Failed to create invite: ${await readErrorMessage(res)}`);
     }
 
-    const data = await res.json();
-    console.log('[API] createRoomInvite data:', data);
-    return data;
+    return res.json();
   },
 
-  joinRoom: async (inviteCode: string, token: string): Promise<any> => {
-    console.log('[API] joinRoom called with inviteCode:', inviteCode);
+  joinRoom: async (inviteCode: string, token?: string): Promise<any> => {
     const res = await fetch(`${API_BASE}/room/join/${encodeURIComponent(inviteCode)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
-    console.log('[API] joinRoom response received:', res.status);
     if (!res.ok) {
-      const errorMsg = await readErrorMessage(res);
-      console.error('[API] joinRoom failed:', errorMsg);
-      throw new Error(`Failed to join room: ${errorMsg}`);
+      throw new Error(`Failed to join room: ${await readErrorMessage(res)}`);
     }
 
-    const data = await res.json();
-    console.log('[API] joinRoom data:', data);
-    return data;
+    return res.json();
   },
 };

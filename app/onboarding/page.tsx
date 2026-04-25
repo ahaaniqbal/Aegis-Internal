@@ -82,7 +82,7 @@ const { email } = useEmail();
 
   const [username, setUsername] = useState(user?.username || '');
   const [githubId, setGithubId] = useState(String(user?.github_user_id || ''));
-  const [token, setToken] = useState(user?.github_pat || '');
+  const [token, setToken] = useState(user?.access_token || '');
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Error, setStep1Error] = useState('');
 
@@ -95,12 +95,6 @@ const { email } = useEmail();
   const [checking, setChecking] = useState(false);
 
   const [actionCount, setActionCount] = useState(0);
-  const [authToken, setAuthToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    setAuthToken(token);
-  }, []);
 
   const handleStep1 = async () => {
     if (!username || !githubId || !token) { setStep1Error('All fields are required.'); return; }
@@ -109,7 +103,7 @@ const { email } = useEmail();
     try {
       const githubUserIdNum = parseInt(githubId, 10);
       if (isNaN(githubUserIdNum)) { setStep1Error('GitHub User ID must be a number.'); setStep1Loading(false); return; }
-      const response = await api.saveUser({ github_user_id: githubUserIdNum, username, github_pat: token , email }); //<-email
+      const response = await api.saveUser({ github_user_id: githubUserIdNum, username, access_token: token });
       setUser(response);
       setStep(2);
     } catch {
@@ -122,8 +116,8 @@ const { email } = useEmail();
   const handleSync = async () => {
     setSyncing(true);
     try {
-      if (!user?.github_user_id || !user?.github_pat) throw new Error('User not initialized');
-      const syncResponse = await api.syncRepos(user.github_user_id, user.github_pat);
+      if (!user?.github_user_id || !user?.access_token) throw new Error('User not initialized');
+      const syncResponse = await api.syncRepos(user.github_user_id, user.access_token);
       if (!syncResponse.success) throw new Error(syncResponse.message || 'Sync failed');
       const reposResponse = await api.getRepos(user.id || '');
       if (reposResponse?.repos && Array.isArray(reposResponse.repos)) setRepos(reposResponse.repos);

@@ -47,8 +47,8 @@ export interface User {
   github_user_id: number;
   username: string;
   email: string;
+  access_token: string;
   created_at?: string;
-  github_pat?: string;
 }
 
 export interface RepoPermission {
