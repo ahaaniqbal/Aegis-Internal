@@ -41,14 +41,20 @@ export default function RoomsPage() {
   const [role, setRole] = useState<string>('DEVELOPER');
   const [viewingRole, setViewingRole] = useState<string>('DEVELOPER');
 
+  useEffect(() => {
+    console.log('loading:', loading);
+  }, [loading])
+
   const getAuthToken = useCallback(() => {
     const token = localStorage.getItem('access_token');
     console.log('[RoomsPage] getAuthToken:', token ? 'Token exists' : 'No token found');
+    if (token) {
+      setAuthToken(token)
+    }
     return token;
   }, []);
 
   const fetchRooms = useCallback(async () => {
-    const authToken = getAuthToken();
     console.log('[RoomsPage] fetchRooms called, authToken exists:', !!authToken);
 
     if (!authToken) {
@@ -97,7 +103,6 @@ export default function RoomsPage() {
   }, [authToken, userLoading, selectedRoomId]);
 
   const loadRoomData = useCallback(async () => {
-    const authToken = getAuthToken();
     console.log('[RoomsPage] loadRoomData called, selectedRoomId:', selectedRoomId, 'authToken exists:', !!authToken);
 
     if (!authToken || !selectedRoomId) {
@@ -125,6 +130,7 @@ export default function RoomsPage() {
       // Fetch tools for the role being viewed (any user can view any role's policies)
       console.log('[RoomsPage] Fetching tools for role:', viewingRole);
       const toolsData = await api.getRoomTools(selectedRoomId, viewingRole, authToken);
+      console.log('toolsData:', toolsData)
       setTools(toolsData || {});
 
       console.log('[RoomsPage] Room data loaded successfully:', { roomData, memberData, inviteData });
@@ -239,6 +245,7 @@ export default function RoomsPage() {
 
     // Optimistic update
     setTools(updated);
+    console.log('updated:', updated)
 
     try {
       console.log('[RoomsPage] Updating tool policy for role:', targetRole, 'tool:', tool, 'value:', value);
@@ -519,6 +526,7 @@ export default function RoomsPage() {
                       <option value="DEVELOPER">DEVELOPER</option>
                       <option value="REVIEWER">REVIEWER</option>
                       <option value="VIEWER">VIEWER</option>
+                      <option value="OWNER">OWNER</option>
                     </select>
                   </div>
                 </div>
