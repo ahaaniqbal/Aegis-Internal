@@ -4,10 +4,12 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 function AuthCallbackFallback() {
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="text-center">
+    <div className="flex h-screen items-center justify-center bg-[var(--bg-app)]">
+      <div className="flex flex-col items-center gap-4 text-center">
         <LoadingSpinner size="lg" />
-        <p className="mt-4 text-sm text-muted-foreground">Logging you in...</p>
+        <p className="text-[13px] text-[var(--neutral-sub-600)]">
+          Logging you in…
+        </p>
       </div>
     </div>
   );

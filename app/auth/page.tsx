@@ -812,7 +812,9 @@ function ShowcasePanel({ reduce }: { reduce: boolean }) {
             auditable, and approved.
           </motion.p>
 
-          {/* Feature bullets — brand-colored icons in soft warm tiles. */}
+          {/* Feature bullets — same halo + brand-gradient disc + white
+              knockout icon pattern as the toasts/onboarding. Premium and
+              consistent across the suite. */}
           <motion.ul variants={fadeUp} className="mt-6 space-y-3.5">
             {FEATURE_BULLETS.map((b) => {
               const Icon = b.icon;
@@ -820,13 +822,28 @@ function ShowcasePanel({ reduce }: { reduce: boolean }) {
                 <li key={b.title} className="flex items-start gap-3">
                   <span
                     aria-hidden
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[rgba(250,115,25,0.18)]"
-                    style={{
-                      backgroundColor: 'rgba(250, 115, 25, 0.10)',
-                      color: 'var(--primary-base)',
-                    }}
+                    className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center"
                   >
-                    <Icon className="h-[17px] w-[17px]" strokeWidth={2} />
+                    {/* Soft warm halo */}
+                    <span
+                      className="absolute inset-0 rounded-full"
+                      style={{ backgroundColor: 'rgba(250, 115, 25, 0.18)' }}
+                    />
+                    {/* Saturated brand-gradient disc — same gradient family
+                        as the primary Button, with the inset top light + soft
+                        drop shadow so it reads as "lit-from-above" */}
+                    <span
+                      className="relative inline-flex h-[26px] w-[26px] items-center justify-center rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(180deg, #fb8939 0%, #fa7319 55%, #ed6a14 100%)',
+                        border: '1px solid #ed6a14',
+                        boxShadow:
+                          'inset 0 1px 0 0 rgba(255,255,255,0.22), 0 1px 2px rgba(206, 94, 18, 0.30)',
+                      }}
+                    >
+                      <Icon className="h-[14px] w-[14px] text-white" strokeWidth={2.5} />
+                    </span>
                   </span>
                   <div className="pt-[3px]">
                     <p className="text-[13.5px] font-semibold tracking-[-0.005em] text-[var(--neutral-strong-950)]">
