@@ -35,8 +35,25 @@ import { DashboardDataProvider } from '@/lib/dashboardDataContext';
 // The legacy `?preview=1` + `aegis_preview` are kept as dev-only aliases
 // so existing screenshots / bookmarks don't break — they map onto the
 // same mock layer.
+// ⚠️ v3-control-plane branch override.
+// This entire branch is the pitch-grade demo. We unconditionally
+// enable demo mode so any deep-link (someone pasting
+// /dashboard/insights or /dashboard/agents) skips auth + onboarding
+// and renders the preview-data layer directly. The real auth flow
+// remains intact on every other branch — DO NOT cherry-pick this
+// constant to main / claude/* / redesign/frontend-features-v1.
+const DEMO_ONLY_BRANCH = true;
+
 function isDemoMode(): boolean {
   if (typeof window === 'undefined') return false;
+  if (DEMO_ONLY_BRANCH) {
+    try {
+      localStorage.setItem('aegis_demo', 'true');
+    } catch {
+      /* private mode — gracefully ignored */
+    }
+    return true;
+  }
   const params = new URLSearchParams(window.location.search);
   if (params.get('demo') === '1') {
     localStorage.setItem('aegis_demo', 'true');
