@@ -18,10 +18,28 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { installPreviewApi } from '@/lib/preview-data';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+
+// ⚠️ v3-control-plane branch override.
+// Same constant as in app/dashboard/layout.tsx + app/auth/layout.tsx —
+// the entire branch ships as the pitch-grade demo, so /onboarding
+// (direct visits, browser back-button, OAuth callbacks) gets bounced
+// straight to /dashboard?demo=1. Do not cherry-pick onto other
+// branches; the real onboarding flow is what those branches ship.
+const DEMO_ONLY_BRANCH = true;
 
 function isDemoMode(): boolean {
   if (typeof window === 'undefined') return false;
+  if (DEMO_ONLY_BRANCH) {
+    try {
+      localStorage.setItem('aegis_demo', 'true');
+    } catch {
+      /* private mode — gracefully ignored */
+    }
+    return true;
+  }
   const params = new URLSearchParams(window.location.search);
   if (params.get('demo') === '1') {
     localStorage.setItem('aegis_demo', 'true');
@@ -39,6 +57,16 @@ export default function OnboardingDemoShell({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+
+  // ⚠️ v3-control-plane branch: redirect /onboarding straight to the
+  // demo dashboard. Belt-and-suspenders with /auth + root redirects so
+  // every conceivable entry point lands on the dashboard.
+  useEffect(() => {
+    if (!DEMO_ONLY_BRANCH || typeof window === 'undefined') return;
+    router.replace('/dashboard?demo=1');
+  }, [router]);
+
   // Run synchronously during render so the page's first api call already
   // sees the patched methods. installPreviewApi is idempotent.
   if (typeof window !== 'undefined' && isDemoMode()) {
@@ -59,6 +87,17 @@ export default function OnboardingDemoShell({
       delete document.documentElement.dataset.demo;
     };
   }, []);
+
+  // Render the loading spinner while the router.replace above bounces
+  // us to /dashboard. Suppress the rest of the onboarding chrome so
+  // the user never sees the wizard, even for a frame.
+  if (DEMO_ONLY_BRANCH) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
   return (
     <>
