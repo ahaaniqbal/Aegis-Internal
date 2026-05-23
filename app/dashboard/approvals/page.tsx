@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Bell, Check, ChevronDown, ChevronRight, Clock, Minus, X } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, Bell, Check, ChevronDown, ChevronRight, Clock, Minus, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAutoRefresh, useUser } from '@/lib/hooks';
 import { MCPApproval } from '@/lib/types';
@@ -872,23 +873,41 @@ function ApprovalItem({
         </div>
 
         {/* Actions */}
-        <div className="mt-4 flex items-center justify-between">
-          <button
-            onClick={toggle}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] hover:text-[var(--neutral-strong-950)]"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-                Hide details
-              </>
-            ) : (
-              <>
-                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-                Show details
-              </>
-            )}
-          </button>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={toggle}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] transition-colors duration-150 hover:text-[var(--neutral-strong-950)]"
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                  Hide details
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+                  Show details
+                </>
+              )}
+            </button>
+            <span aria-hidden className="text-[var(--stroke-sub-300)]">·</span>
+            {/* Drill-in link to the full Approval detail page. Stays
+                in the row's action group (not the top-right) so the
+                inline expand pattern still works for the common
+                "quick look" use case; this is for "I need the full
+                context view." */}
+            <Link
+              href={`/dashboard/approvals/${approval.id}`}
+              className="group/open inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] transition-colors duration-150 hover:text-[var(--primary-base)]"
+            >
+              Open full view
+              <ArrowUpRight
+                className="h-3 w-3 transition-transform group-hover/open:-translate-y-px group-hover/open:translate-x-px"
+                strokeWidth={2}
+              />
+            </Link>
+          </div>
 
           {isPending && (
             <div className="flex items-center gap-2">

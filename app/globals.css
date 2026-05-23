@@ -798,6 +798,32 @@ input:-webkit-autofill {
   filter: invert(1) hue-rotate(180deg);
 }
 
+/* ─── Connector logos: dark-mode inversion ──────────────────────────
+   Mirror the tool-logo pattern above for the Connectors family.
+   GitHub's brand mark ships as #181717 (near-black silhouette) and
+   disappears against the dark page bg when rendered as a bare
+   ConnectorIcon — in sessions chips, the runs filter banner, the
+   connector switcher pills, recent-activity rows, etc.
+
+   Override: when the same logo is nested inside a ConnectorMark
+   (which carries data-connector-tile because its inline #ffffff bg
+   stays light in dark mode), suppress the inversion so the silhouette
+   reads correctly on the always-light tile. Without this override
+   GitHub would invert to white-on-white inside the catalog cards.
+
+   The other connector logos ship in their saturated brand colors
+   (Slack chambers, Linear purple, Jira blue, GitHub Actions cyan,
+   Terraform purple, Postgres blue elephant) and stay readable
+   against either canvas, so they're not in the inversion list. */
+[data-theme="dark"] img[data-connector-id="github"],
+[data-theme="dark"] img[data-connector-id="notion"] {
+  filter: invert(1) hue-rotate(180deg);
+}
+[data-theme="dark"] [data-connector-tile] img[data-connector-id="github"],
+[data-theme="dark"] [data-connector-tile] img[data-connector-id="notion"] {
+  filter: none;
+}
+
 /* ─────────────────────────────────────────────────────────────────
    Sidebar collapse — width-var driven
    ─────────────────────────────────────────────────────────────────

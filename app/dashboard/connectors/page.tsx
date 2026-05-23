@@ -20,6 +20,7 @@
  * Data lives in CONNECTORS (components/ui/ConnectorMark.tsx).
  */
 
+import { useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, Clock, Loader2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -31,74 +32,242 @@ import { DUR, EASE, fadeUp, staggerContainer } from '@/lib/motion';
 
 type ConnectorStatus = 'live' | 'in-progress' | 'coming-soon';
 
-const STATUS_BY_ID: Record<ConnectorId, ConnectorStatus> = {
+/**
+ * Real-mode connector status — what's actually shipped in the backend.
+ * Honest engineering state for prospects and pilots clicking through
+ * the page when NOT in the demo workspace.
+ */
+const STATUS_BY_ID_REAL: Record<ConnectorId, ConnectorStatus> = {
   github: 'live',
-  slack: 'in-progress',
-  linear: 'coming-soon',
-  jira: 'coming-soon',
-  'github-actions': 'coming-soon',
-  terraform: 'coming-soon',
+  slack: 'live',
+  linear: 'in-progress',
+  'github-actions': 'in-progress',
   postgres: 'coming-soon',
+  terraform: 'coming-soon',
+  jira: 'coming-soon',
+  // Stage 2 connectors — honest "coming soon" until backend integration ships.
+  datadog: 'coming-soon',
+  sentry: 'coming-soon',
+  kubernetes: 'coming-soon',
+  cloudflare: 'coming-soon',
+  notion: 'coming-soon',
+};
+
+/**
+ * Demo-workspace status — shows the FULL control-plane vision with all
+ * 12 connectors active. This is the pitch view: an investor watching
+ * the demo sees the entire surface. The honest roadmap state is
+ * preserved for real-workspace visitors via STATUS_BY_ID_REAL above.
+ */
+const STATUS_BY_ID_DEMO: Record<ConnectorId, ConnectorStatus> = {
+  github: 'live',
+  slack: 'live',
+  linear: 'live',
+  'github-actions': 'live',
+  postgres: 'live',
+  terraform: 'live',
+  jira: 'live',
+  datadog: 'live',
+  sentry: 'live',
+  kubernetes: 'live',
+  cloudflare: 'live',
+  notion: 'live',
 };
 
 // Display order — Live first, then In Progress, then queued in the
 // priority order from the Notion roadmap.
 const DISPLAY_ORDER: ConnectorId[] = [
+  // Live integrations first — what an evaluator can use today.
   'github',
   'slack',
+  // In-progress next — actively in build, visible state for transparency.
   'linear',
-  'jira',
   'github-actions',
-  'terraform',
+  // Coming-soon at the end, in roadmap-priority order from the Notion
+  // page. Observability + cluster + edge round out the full developer
+  // workflow; Notion at the end is the docs-as-attack-surface bet.
   'postgres',
+  'terraform',
+  'jira',
+  'datadog',
+  'sentry',
+  'kubernetes',
+  'cloudflare',
+  'notion',
 ];
 
 export default function ConnectorsPage() {
   const reduce = useReducedMotion();
+
+  // Demo workspace shows the FULL vision (all 12 connectors live);
+  // real workspace shows honest engineering state. Detect via the
+  // data-demo attribute set on <html> by OnboardingDemoShell /
+  // DashboardLayout.
+  const [demoOn, setDemoOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    const update = () => {
+      setDemoOn(document.documentElement.dataset.demo === 'true');
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-demo'],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const statusById = demoOn ? STATUS_BY_ID_DEMO : STATUS_BY_ID_REAL;
+  const liveCount = Object.values(statusById).filter((s) => s === 'live').length;
+  const inflightCount = Object.values(statusById).filter((s) => s !== 'live').length;
+
+  // Category filter state. `null` = "All". Selecting a category
+  // narrows the displayed grid to connectors in that category. The
+  // chip strip pattern mirrors Vercel Marketplace + Linear Integrations
+  // — the convention for catalog filtering in dev tools.
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Precompute the chip pool from the connector catalog so adding a
+  // new connector with a new category automatically gets a chip
+  // without code change. Each chip carries a count so the user knows
+  // catalog breadth before clicking.
+  const categoryChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const id of DISPLAY_ORDER) {
+      const cat = CONNECTORS[id].category;
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    // Stable order: by display-order of the first connector in each
+    // category. Keeps the chip row predictable as the catalog grows.
+    const firstSeenIndex = new Map<string, number>();
+    DISPLAY_ORDER.forEach((id, i) => {
+      const cat = CONNECTORS[id].category;
+      if (!firstSeenIndex.has(cat)) firstSeenIndex.set(cat, i);
+    });
+    return Array.from(counts.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort(
+        (a, b) =>
+          (firstSeenIndex.get(a.category) ?? 0) - (firstSeenIndex.get(b.category) ?? 0),
+      );
+  }, []);
+
+  const visibleConnectors = useMemo(
+    () =>
+      selectedCategory
+        ? DISPLAY_ORDER.filter((id) => CONNECTORS[id].category === selectedCategory)
+        : DISPLAY_ORDER,
+    [selectedCategory],
+  );
 
   return (
     <>
       <Topbar title="Connectors" subtitle="The tools Aegis governs for your agents" />
 
       <div className="mx-auto max-w-[1320px] 2xl:max-w-[1480px] px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-        {/* ─── Hero ──────────────────────────────────────────────────── */}
-        <motion.section
+        {/* ─── Header ──────────────────────────────────────────────────
+            Tight eyebrow + h1 + single stat line, matching the shape of
+            every other dashboard page (Runs, Policies, Sessions, etc.).
+            The previous marketing-grade 40px display heading + 560px
+            paragraph felt like a landing page slab inside a dashboard —
+            the eye couldn't flow naturally into the filter chip row +
+            connector grid below. */}
+        <motion.header
           variants={staggerContainer(0.05, 0.04)}
           initial={reduce ? false : 'hidden'}
           animate="show"
-          className="mb-6 sm:mb-8"
+          className="mb-6"
         >
           <motion.p
             variants={fadeUp}
-            className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--primary-base)]"
+            className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]"
           >
-            Connector catalog · 7 integrations
+            Connector catalog
           </motion.p>
           <motion.h1
             variants={fadeUp}
-            className="max-w-[720px] text-[34px] font-semibold leading-[1.05] tracking-[-0.035em] text-[var(--neutral-strong-950)] sm:text-[40px]"
+            className="text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[var(--neutral-strong-950)]"
           >
-            Govern every tool your agents touch.
+            Every tool your agents touch
           </motion.h1>
           <motion.p
             variants={fadeUp}
-            className="mt-4 max-w-[560px] text-[14.5px] leading-[1.6] text-[var(--neutral-sub-600)]"
+            className="mt-2 text-[13.5px] text-[var(--neutral-sub-600)]"
           >
-            Aegis started with GitHub. Six more surfaces are shipping this
-            sprint, each governed by the same Allow, Approval, Deny model.
+            {liveCount} live
+            {inflightCount > 0 ? ` · ${inflightCount} in flight` : ''} · Allow,
+            Approval, Deny on every call.
           </motion.p>
-        </motion.section>
+        </motion.header>
+
+        {/* ─── Category filter chip strip ────────────────────────────
+            Horizontal pill row. "All" plus one chip per category, each
+            showing its count. Same chip pattern as the ConnectorSwitcher
+            on the detail page so the catalog reads as one design family.
+            Mobile: horizontal scroll with edge-fade mask (same as
+            ConnectorSwitcher) so the row stays one clean line on
+            narrow viewports. */}
+        <motion.nav
+          aria-label="Filter connectors by category"
+          className="-mx-1 mb-5 overflow-x-auto px-1 [-ms-overflow-style:none] [mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)] [scrollbar-width:none] sm:[mask-image:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden"
+          initial={reduce ? false : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.default, ease: EASE.out, delay: 0.1 }}
+        >
+          <div className="flex flex-nowrap items-center gap-1.5 sm:flex-wrap">
+            <CategoryChip
+              label="All"
+              count={DISPLAY_ORDER.length}
+              active={selectedCategory === null}
+              onClick={() => setSelectedCategory(null)}
+            />
+            {categoryChips.map(({ category, count }) => (
+              <CategoryChip
+                key={category}
+                label={category}
+                count={count}
+                active={selectedCategory === category}
+                onClick={() => setSelectedCategory(category)}
+              />
+            ))}
+          </div>
+        </motion.nav>
 
         {/* ─── Grid ──────────────────────────────────────────────────── */}
         <motion.div
           variants={staggerContainer(0.04, 0.16)}
           initial={reduce ? false : 'hidden'}
           animate="show"
+          // Key on the selected category so the stagger animation
+          // re-fires on filter change. Without this, swapping the
+          // filter would feel static — the user clicked, did anything
+          // change? The cascading fade is the visual confirmation.
+          key={selectedCategory ?? 'all'}
           className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3"
         >
-          {DISPLAY_ORDER.map((id) => (
-            <ConnectorCard key={id} id={id} status={STATUS_BY_ID[id]} />
-          ))}
+          {visibleConnectors.length > 0 ? (
+            visibleConnectors.map((id) => (
+              <ConnectorCard key={id} id={id} status={statusById[id]} />
+            ))
+          ) : (
+            // Defensive empty state. Today every category has ≥1
+            // connector so this can't render, but as the catalog grows
+            // / shrinks dynamically (e.g. plan-gated visibility) it'll
+            // matter.
+            <div className="col-span-full rounded-[12px] border border-dashed border-[var(--stroke-soft-200)] bg-white px-6 py-12 text-center">
+              <p className="text-[13px] text-[var(--neutral-sub-600)]">
+                No connectors in {selectedCategory}. Try another category or{' '}
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(null)}
+                  className="font-medium text-[var(--primary-base)] underline-offset-4 hover:underline"
+                >
+                  show all
+                </button>
+                .
+              </p>
+            </div>
+          )}
         </motion.div>
 
         {/* ─── Footer hint ───────────────────────────────────────────── */}
@@ -122,6 +291,53 @@ export default function ConnectorsPage() {
   );
 }
 
+// ─── Category filter chip ─────────────────────────────────────────────
+/**
+ * Single chip in the category filter row. Visual treatment matches the
+ * ConnectorSwitcher pills on the connector detail page so the whole
+ * Connectors surface reads as one filter design family.
+ *
+ * Active chip: brand-orange tint + dark text + faint shadow.
+ * Inactive: white + neutral border + hover lift.
+ */
+function CategoryChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'group inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border px-2.5 py-[5px] text-[11.5px] font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-alpha-24)]',
+        active
+          ? 'border-[var(--primary-base)]/40 bg-[var(--primary-lighter)] text-[var(--primary-dark)] shadow-[0_1px_2px_rgba(250,115,25,0.10)]'
+          : 'border-[var(--stroke-soft-200)] bg-white text-[var(--neutral-sub-600)] hover:-translate-y-px hover:border-[var(--stroke-sub-300)] hover:text-[var(--neutral-strong-950)] hover:shadow-[0_2px_4px_rgba(23,23,23,0.05)]',
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          'inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[9.5px] font-bold tabular-nums transition-colors duration-150',
+          active
+            ? 'bg-[var(--primary-base)]/15 text-[var(--primary-dark)]'
+            : 'bg-[var(--neutral-weak-50)] text-[var(--neutral-soft-400)] group-hover:bg-[var(--neutral-soft-200)] group-hover:text-[var(--neutral-sub-600)]',
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 // ─── The connector card itself ────────────────────────────────────────
 function ConnectorCard({
   id,
@@ -133,6 +349,11 @@ function ConnectorCard({
   const def = CONNECTORS[id];
 
   return (
+    <Link
+      href={`/dashboard/connectors/${id}`}
+      className="block"
+      aria-label={`${def.name} connector detail`}
+    >
     <motion.article
       variants={fadeUp}
       // Lift handled by Framer Motion instead of CSS transition because
@@ -217,15 +438,13 @@ function ConnectorCard({
               <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} />
               Live today
             </span>
-            <Link href="/dashboard/rooms">
-              <Button
-                variant="secondary"
-                size="sm"
-                trailingIcon={<ArrowUpRight className="h-3 w-3" strokeWidth={2.25} />}
-              >
-                Configure
-              </Button>
-            </Link>
+            {/* "Configure" CTA reads as a visual affordance; the
+                whole card is a Link, so we render it as a styled
+                span instead of a nested <Link>/<a> (invalid HTML). */}
+            <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--stroke-sub-300)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[var(--neutral-strong-950)] transition-colors group-hover:bg-[var(--neutral-weak-50)]">
+              Open
+              <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} />
+            </span>
           </>
         )}
         {status === 'in-progress' && (
@@ -242,6 +461,7 @@ function ConnectorCard({
         )}
       </div>
     </motion.article>
+    </Link>
   );
 }
 

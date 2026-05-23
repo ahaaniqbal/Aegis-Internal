@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code session state — launch.json + skill memory live here,
+# they shouldn't ship to teammates.
+.claude/

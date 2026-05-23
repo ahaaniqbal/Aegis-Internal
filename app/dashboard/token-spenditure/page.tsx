@@ -28,6 +28,8 @@ import { useAutoRefresh, useUser } from '@/lib/hooks';
 import { api } from '@/lib/api';
 import { TokenMeterResponse } from '@/lib/types';
 import { DUR, EASE, fadeUp, staggerContainer } from '@/lib/motion';
+import { useDashboardData } from '@/lib/dashboardDataContext';
+import { AgentMark } from '@/components/ui/AgentMark';
 
 type SessionBucket = {
   label: string;
@@ -323,6 +325,12 @@ function granularityLabel(gran: ChartGranularity): string {
 
 export default function TokenSpenditurePage() {
   const { user, isLoading: userLoading } = useUser();
+  // Per-agent attribution comes from runs (each carries agent_name +
+  // session_id); the token meter records only carry session_id. We
+  // build a session → agent lookup and join on the client. Same
+  // pattern works for real-mode + demo-mode because both seed the
+  // dashboard data context.
+  const { sessionActions: dashboardRuns } = useDashboardData();
   const reduce = useReducedMotion();
   const [rows, setRows] = useState<TokenMeterResponse[]>([]);
   const [usageRange, setUsageRange] = useState<UsageRange>('all');
@@ -428,6 +436,79 @@ export default function TokenSpenditurePage() {
     for (const s of sessionData) map.set(s.session, s.label);
     return map;
   }, [sessionData]);
+
+  // session_id → agent_name lookup. Built once from the runs feed so
+  // we can attribute every TokenMeterResponse row to a specific
+  // agent. Rows whose session_id can't be matched (legacy data, or
+  // runs not yet loaded) fall into the "Unknown agent" bucket.
+  const sessionToAgent = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of dashboardRuns) {
+      if (r.session_id && r.agent_name && !map.has(r.session_id)) {
+        map.set(r.session_id, r.agent_name);
+      }
+    }
+    return map;
+  }, [dashboardRuns]);
+
+  /** Per-agent token spend leaderboard. Aggregates the filtered token
+   *  records by agent (via session_id → agent_name join), sorts by
+   *  total desc, attaches a modelled cost using COST_PER_TOKEN_USD.
+   *  This is the VP Eng surface: "Devin costs $4,200 this month."
+   *
+   *  The bar widths are computed against the top agent's total so the
+   *  leader always reads at 100% — the comparison is between agents,
+   *  not against some abstract maximum. */
+  const agentSpend = useMemo(() => {
+    type AgentTotal = {
+      agent: string;
+      input: number;
+      output: number;
+      total: number;
+      sessions: Set<string>;
+      records: number;
+    };
+    const byAgent = new Map<string, AgentTotal>();
+    for (const row of displayRows) {
+      const agent = sessionToAgent.get(row.session_id) ?? 'Unknown agent';
+      const a = byAgent.get(agent) ?? {
+        agent,
+        input: 0,
+        output: 0,
+        total: 0,
+        sessions: new Set<string>(),
+        records: 0,
+      };
+      a.input += toNumber(row.input_token);
+      a.output += toNumber(row.output_token);
+      a.total = a.input + a.output;
+      if (row.session_id) a.sessions.add(row.session_id);
+      a.records += 1;
+      byAgent.set(agent, a);
+    }
+    const totalAcrossAll = Array.from(byAgent.values()).reduce(
+      (s, a) => s + a.total,
+      0,
+    );
+    const ranked = Array.from(byAgent.values()).sort(
+      (a, b) => b.total - a.total,
+    );
+    const topTotal = ranked[0]?.total ?? 0;
+    return {
+      total: totalAcrossAll,
+      rows: ranked.map((a) => ({
+        agent: a.agent,
+        input: a.input,
+        output: a.output,
+        total: a.total,
+        sessions: a.sessions.size,
+        records: a.records,
+        cost: a.total * COST_PER_TOKEN_USD,
+        sharePct: totalAcrossAll > 0 ? (a.total / totalAcrossAll) * 100 : 0,
+        barPct: topTotal > 0 ? (a.total / topTotal) * 100 : 0,
+      })),
+    };
+  }, [displayRows, sessionToAgent]);
 
   /** Bucket granularity, chosen based on the selected range + data
    *  shape. Drives the bar chart's axis density and the chart title. */
@@ -926,6 +1007,107 @@ export default function TokenSpenditurePage() {
           </motion.div>
         )}
 
+        {/* ─── Agent breakdown ──────────────────────────────────────
+            Per-agent leaderboard joining the token-meter records with
+            the runs feed via session_id → agent_name. This is the VP
+            Eng surface: "Devin costs $4,200 this month, Cursor costs
+            $1,800." Bars are scaled to the top agent (the leader reads
+            at 100%) so the comparison is between agents, not against
+            an abstract max.
+
+            Visual: clean leaderboard list. Each row = AgentMark + name
+            + horizontal bar + token count + cost + sessions chip.
+            Single brand-orange tone for all bars so the eye reads the
+            ranking, not the colour assignments. */}
+        {agentSpend.rows.length > 0 && (
+          <motion.div
+            className="mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.32 }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-soft-200)] px-5 py-3.5">
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
+                  Cost attribution
+                </p>
+                <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                  Spend by agent {chartScopeLabel}
+                </h2>
+              </div>
+              <span className="text-[11.5px] tabular-nums text-[var(--neutral-soft-400)]">
+                {agentSpend.rows.length} {agentSpend.rows.length === 1 ? 'agent' : 'agents'} ·{' '}
+                {formatUSD(agentSpend.total * COST_PER_TOKEN_USD)} total
+              </span>
+            </div>
+            <ul className="divide-y divide-[var(--stroke-soft-200)]">
+              {agentSpend.rows.map((a, i) => (
+                <li
+                  key={a.agent}
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 sm:gap-4"
+                >
+                  {/* Left: rank + AgentMark + agent name */}
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-[5px] bg-[var(--neutral-weak-50)] px-1 text-[10.5px] font-bold tabular-nums text-[var(--neutral-soft-400)]">
+                      {i + 1}
+                    </span>
+                    <AgentMark name={a.agent} size="sm" />
+                    <span className="text-[13px] font-medium tracking-[-0.005em] text-[var(--neutral-strong-950)]">
+                      {a.agent}
+                    </span>
+                  </div>
+
+                  {/* Middle: bar + tokens/cost */}
+                  <div className="min-w-0 space-y-1">
+                    <div
+                      aria-hidden
+                      className="h-[6px] overflow-hidden rounded-full bg-[var(--neutral-weak-50)] ring-1 ring-[var(--stroke-soft-200)]"
+                    >
+                      <motion.span
+                        className="block h-full rounded-full"
+                        style={{ backgroundColor: 'var(--primary-base)' }}
+                        initial={reduce ? { width: `${a.barPct}%` } : { width: 0 }}
+                        animate={{ width: `${a.barPct}%` }}
+                        transition={{
+                          duration: 0.6,
+                          ease: [0.32, 0.72, 0.32, 1],
+                          delay: 0.4 + i * 0.04,
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--neutral-soft-400)]">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="font-semibold tabular-nums text-[var(--neutral-strong-950)]">
+                          {a.total.toLocaleString()}
+                        </span>
+                        <span>tokens</span>
+                      </span>
+                      <span aria-hidden className="text-[var(--stroke-sub-300)]">·</span>
+                      <span className="tabular-nums">
+                        {a.sessions} {a.sessions === 1 ? 'session' : 'sessions'}
+                      </span>
+                      <span aria-hidden className="text-[var(--stroke-sub-300)]">·</span>
+                      <span className="tabular-nums">
+                        {a.sharePct.toFixed(1)}% of spend
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: $ cost */}
+                  <div className="shrink-0 text-right">
+                    <p className="text-[16px] font-semibold leading-none tracking-[-0.01em] tabular-nums text-[var(--neutral-strong-950)]">
+                      {formatUSD(a.cost)}
+                    </p>
+                    <p className="mt-1 text-[10.5px] font-medium uppercase tracking-[0.06em] text-[var(--neutral-soft-400)]">
+                      Modelled cost
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
+
         {/* Recent records table */}
         <motion.div
           className="overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
@@ -1162,6 +1344,17 @@ function Legend({ label, color }: { label: string; color: string }) {
 // territory. Swap for a real per-model figure when the backend exposes one.
 const COST_PER_TOKEN_USD = 0.000_05; // $50 per 1M tokens — Opus-class blended estimate.
 
+/** Compact USD formatter. Used by the MonetarySavingsTile + the
+ *  per-agent cost-attribution leaderboard. Lifted to module scope so
+ *  both components can share the same shaping rules (under $100 keeps
+ *  cents; > $10k collapses to k; > $1M collapses to M). */
+function formatUSD(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
+  if (n >= 100) return `$${Math.round(n).toLocaleString()}`;
+  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
+
 function MonetarySavingsTile({
   buckets,
   reduce,
@@ -1186,13 +1379,6 @@ function MonetarySavingsTile({
   const withoutAegisTotal = buckets.reduce((s, b) => s + b.without_aegis, 0);
   const savingsRate =
     withoutAegisTotal > 0 ? Math.round((tokensSaved / withoutAegisTotal) * 100) : 0;
-
-  const formatUSD = (n: number) => {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
-    if (n >= 100) return `$${Math.round(n).toLocaleString()}`;
-    return `$${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-  };
 
   const formatTokens = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

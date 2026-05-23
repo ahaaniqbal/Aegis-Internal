@@ -27,6 +27,9 @@ import {
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import Topbar from '@/components/layout/Topbar';
 import { AgentMark } from '@/components/ui/AgentMark';
+import { ConnectorIcon, type ConnectorId } from '@/components/ui/ConnectorMark';
+import { AnomalyChip } from '@/components/ui/AnomalyChip';
+import { ActionToolbar } from '@/components/ui/ActionToolbar';
 import DecisionBadge from '@/components/ui/DecisionBadge';
 import EmptyState from '@/components/ui/EmptyState';
 import ErrorBanner from '@/components/ui/ErrorBanner';
@@ -292,6 +295,15 @@ function SessionRow({
             <span className="hidden sm:inline-flex">
               <CodeChip>{session.session_id?.substring(0, 8)}…</CodeChip>
             </span>
+            {/* CIL anomaly chip — surfaces session-level if any action
+                in this session was flagged. Reads as "this journey
+                had something unusual" at a scan. */}
+            {session.has_anomaly && (
+              <AnomalyChip
+                anomaly
+                reason="One or more actions in this session were flagged by the Contextual Intelligence Layer"
+              />
+            )}
           </div>
           <div className="mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--neutral-soft-400)]">
             <span className="inline-flex items-center gap-1">
@@ -306,6 +318,32 @@ function SessionRow({
               </span>{' '}
               {Number(session.action_count) === 1 ? 'action' : 'actions'}
             </span>
+            {/* Tool-journey badges — the brand marks for every
+                connector this session touched, in first-seen order.
+                Visible proof that this agent crossed Slack →
+                GitHub → Linear (or whatever its archetype was).
+                Sessions that span 3+ connectors sell the control-
+                plane claim at a glance. */}
+            {Array.isArray(session.connectors) && session.connectors.length > 0 && (
+              <>
+                <span className="text-[var(--stroke-sub-300)]">·</span>
+                <span className="inline-flex items-center gap-1">
+                  {session.connectors.slice(0, 5).map((c) => (
+                    <ConnectorIcon
+                      key={c}
+                      id={c as ConnectorId}
+                      size={12}
+                      className="opacity-90"
+                    />
+                  ))}
+                  {session.connectors.length > 1 && (
+                    <span className="text-[10.5px] font-medium text-[var(--neutral-sub-600)]">
+                      {session.connectors.length} tools
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
             {repos.length > 0 && (
               <>
                 <span className="hidden text-[var(--stroke-sub-300)] sm:inline">·</span>
@@ -361,6 +399,17 @@ function SessionRow({
           className="bg-gradient-to-b from-[var(--primary-lighter)]/45 to-[var(--white-0)]"
         >
         <div className="px-4 pb-5 pt-1 sm:px-6">
+          {/* Session-level Action toolbar — sits ABOVE the nested
+              panel so the reviewer can intervene without scrolling
+              past the full action timeline. Pause / scope-down apply
+              to the whole session; rollback applies to the most
+              recent action and routes appropriately. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <ActionToolbar
+              targetLabel={session.session_id?.slice(0, 8)}
+              show={['pause', 'scope-down', 'escalate']}
+            />
+          </div>
           {/* Inner surface — pure white card so it reads as a true nested panel */}
           <div className="overflow-hidden rounded-[10px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]">
             {/* Header strip with session meta */}

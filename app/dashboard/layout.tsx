@@ -153,9 +153,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     // Demo mode — skip auth entirely (lets prospects tour the dashboard
     // pre-signup) and inject a fake user record so user-scoped hooks
-    // have something to bind to.
+    // have something to bind to. Without this, `useDashboardData()`
+    // early-returns on `!user?.id`, every api call is skipped, and the
+    // whole dashboard renders empty states (0 runs / 0 sessions / 0
+    // metrics) even though `installPreviewApi()` patched the api
+    // singleton. The patched calls only fire if a user.id exists.
     if (isDemoMode()) {
-      // if (!user?.id) setUser(DEMO_USER);
+      if (!user?.id) setUser(DEMO_USER);
       setIsReady(true);
       return;
     }

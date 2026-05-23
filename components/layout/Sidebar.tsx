@@ -14,6 +14,8 @@ import {
   Clock,
   Coins,
   Boxes,
+  Bot,
+  Sparkles,
   LifeBuoy,
   Settings,
   Menu,
@@ -97,6 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Runs', href: '/dashboard/runs', icon: Activity },
       { name: 'Sessions', href: '/dashboard/sessions', icon: Layers },
+      { name: 'Agents', href: '/dashboard/agents', icon: Bot },
       { name: 'Rooms', href: '/dashboard/rooms', icon: Users },
     ],
   },
@@ -113,6 +116,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Insights',
     items: [
+      // CIL Insights sits at the top of Insights because it's the
+      // moat surface. Token Spenditure (cost story) is secondary.
+      { name: 'CIL Insights', href: '/dashboard/insights', icon: Sparkles },
       { name: 'Token Spenditure', href: '/dashboard/token-spenditure', icon: Coins },
     ],
   },

@@ -29,6 +29,7 @@ import { JsonHighlight } from '@/components/ui/JsonHighlight';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ToolLogo } from '@/components/ui/ToolLogo';
+import { ConnectorMark, CONNECTORS, type ConnectorId } from '@/components/ui/ConnectorMark';
 import { useToast } from '@/components/ui/Toast';
 import { useUser } from '@/lib/hooks';
 import { useRoom } from '@/lib/roomContext';
@@ -530,7 +531,118 @@ export default function RoomConnectPage() {
             </Button>
           </div>
         </motion.section>
+
+        {/* ─── Step 5 — Connected services ──────────────────────────────
+            Which downstream tools this room governs. Step 1-4 wired
+            the AGENT to Aegis; this step shows the AGENT-FACING surface
+            (GitHub / Slack / Linear / etc.). Each card has its own
+            OAuth-style connect button. GitHub is connected by default
+            (the room's repo); other connectors show a "Connect"
+            affordance.
+
+            Demo only — clicking "Connect" doesn't fire real OAuth.
+            Backend wiring lands sprint-by-sprint as each connector
+            graduates from in-progress to live. */}
+        <motion.section
+          variants={fadeUp}
+          className="overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+        >
+          <StepHeader
+            number={5}
+            title="Connected services"
+            subtitle="The downstream tools this room can govern. Connect more to broaden the agent's reach."
+          />
+          <ConnectedServices roomId={roomId ?? ''} />
+        </motion.section>
       </motion.div>
+    </div>
+  );
+}
+
+// ─── Connected services grid ────────────────────────────────────────────
+//
+// Renders the 7-connector catalog inside the Connect tab. Each card
+// shows the brand mark, the connector's name, current connection
+// state, and a Connect / Manage button. GitHub is auto-connected (the
+// room's repo). Others are demo-stub Connect buttons that toast a
+// "connection started" message and flip the local state to "Connected"
+// so designers can demo the "before / after" of wiring a new tool.
+
+function ConnectedServices({ roomId: _roomId }: { roomId: string }) {
+  const toast = useToast();
+  // Stable initial state per connector. Real backend will replace this
+  // with the room's actual connector inventory.
+  const [connected, setConnected] = useState<Record<string, boolean>>({
+    github: true,
+    slack: true,
+    linear: false,
+    'github-actions': false,
+    postgres: false,
+    terraform: false,
+    jira: false,
+  });
+
+  const order: ConnectorId[] = [
+    'github',
+    'slack',
+    'linear',
+    'github-actions',
+    'postgres',
+    'terraform',
+    'jira',
+  ];
+
+  const handleConnect = (id: ConnectorId) => {
+    setConnected((prev) => ({ ...prev, [id]: true }));
+    const def = CONNECTORS[id];
+    toast.push(`${def.name} connection started`, {
+      description: `OAuth handoff would fire here. Demo only — no real backend call.`,
+      variant: 'info',
+    });
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2 lg:grid-cols-2">
+      {order.map((id) => {
+        const def = CONNECTORS[id];
+        const isConnected = connected[id];
+        return (
+          <div
+            key={id}
+            className="flex items-center gap-3 rounded-[10px] border border-[var(--stroke-soft-200)] bg-white p-3"
+          >
+            <ConnectorMark id={id} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold tracking-[-0.005em] text-[var(--neutral-strong-950)]">
+                {def.name}
+              </p>
+              <p className="truncate text-[11px] text-[var(--neutral-soft-400)]">
+                {def.category}
+              </p>
+            </div>
+            {isConnected ? (
+              <span
+                className="inline-flex h-7 items-center gap-1 rounded-[7px] px-2 text-[11.5px] font-semibold uppercase tracking-[0.06em]"
+                style={{
+                  backgroundColor: 'rgba(31, 193, 107, 0.12)',
+                  color: 'var(--success-dark)',
+                }}
+              >
+                <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />
+                Connected
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleConnect(id)}
+                className="inline-flex h-7 items-center rounded-[7px] border border-[var(--stroke-sub-300)] bg-white px-2.5 text-[11.5px] font-semibold text-[var(--neutral-strong-950)] transition-colors hover:bg-[var(--neutral-weak-50)]"
+              >
+                Connect
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

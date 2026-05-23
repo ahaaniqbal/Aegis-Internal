@@ -782,7 +782,7 @@ function TemplateCard({
         <p className="mt-1 text-[11.5px] leading-[1.45] text-[var(--neutral-sub-600)]">
           {template.description}
         </p>
-        <p className="mt-2 text-[10.5px] font-medium uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">
+        <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)] tabular-nums">
           ~{coverage}h/week
         </p>
       </div>

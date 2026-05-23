@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
 import { DUR, EASE, fadeUp, fadeUpSm, staggerContainer } from '@/lib/motion';
 import {
+  AlertTriangle,
   ArrowUpRight,
   Bell,
   CheckCircle2,
@@ -39,6 +40,8 @@ import { CodeChip } from '@/components/ui/CodeChip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { ConnectorIcon, getConnectorForTool } from '@/components/ui/ConnectorMark';
+import { IconMark } from '@/components/ui/IconMark';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -142,6 +145,34 @@ export default function DashboardHomePage() {
       ? (policyString.match(/1/g)?.length ?? 0)
       : 10;
 
+    // ── CIL + outcomes signals ─────────────────────────────────────
+    // CIL anomalies surfaced this week — the moat metric. Counts
+    // runs that the Contextual Intelligence Layer flagged as
+    // behavioral outliers. Demos as "what static policies would have
+    // missed."
+    const anomaliesThisWeek = runsThisWeek.filter((r) => r.anomaly).length;
+    // Risky actions prevented = DENY + REQUIRE_APPROVAL routed for
+    // review. The aggregate "what Aegis blocked from doing damage."
+    const approvalsThisWeek = runsThisWeek.filter(
+      (r) => r.decision?.toUpperCase() === 'REQUIRE_APPROVAL',
+    ).length;
+    const preventedThisWeek = blockedThisWeek + approvalsThisWeek;
+    // Tools governed = unique connector slugs touched this week.
+    // Shows the control-plane breadth without needing to leave the
+    // dashboard for the Connectors page. Uses the canonical
+    // `getConnectorForTool` lookup so adding new connectors (Datadog,
+    // Sentry, K8s, Cloudflare, Notion etc.) automatically counts
+    // toward this number without code change. Falls back to 'unknown'
+    // for tools the catalog hasn't classified yet — those still
+    // contribute to the breadth count since they're real distinct
+    // surfaces; the bucket label just isn't pretty.
+    const toolsGovernedThisWeek = new Set(
+      runsThisWeek
+        .map((r) => r.tool_name)
+        .filter(Boolean)
+        .map((t) => getConnectorForTool(t) ?? `unknown:${t}`),
+    ).size;
+
     return {
       activeSessions: activeSessionIds.size,
       runsThisWeek: runsThisWeek.length,
@@ -149,6 +180,10 @@ export default function DashboardHomePage() {
       policiesActive,
       blockedThisWeek,
       rewritesThisWeek,
+      // CIL + outcomes
+      anomaliesThisWeek,
+      preventedThisWeek,
+      toolsGovernedThisWeek,
     };
   }, [runs, approvals, policyString]);
 
@@ -161,6 +196,18 @@ export default function DashboardHomePage() {
   );
 
   const recentRuns = useMemo(() => runs.slice(0, 8), [runs]);
+
+  /**
+   * CIL anomaly callout — top N most-recent runs flagged by the
+   * Contextual Intelligence Layer. The dashboard hero proves "we have
+   * intelligence"; this list proves "and here's what it caught."
+   * Empty state is allowed and reads as a positive: "Baselines healthy."
+   */
+  const anomalousRuns = useMemo(
+    () => runs.filter((r) => r.anomaly).slice(0, 4),
+    [runs],
+  );
+
   const username = user?.username || 'there';
 
   // Decision distribution percentages
@@ -281,6 +328,160 @@ export default function DashboardHomePage() {
             active {stats.activeSessions === 1 ? 'session' : 'sessions'} right now.
           </motion.p>
         </motion.header>
+
+        {/* ─── Outcomes Hero ────────────────────────────────────────────
+            4-tile row that quantifies the value Aegis delivered this
+            week. This is the slide every investor and every VP Eng
+            wants to see: dollars saved, risky actions prevented, CIL
+            anomalies surfaced, control-plane breadth. Position above
+            the Decision Overview because outcomes > activity. */}
+        <motion.section
+          className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.14 }}
+          aria-label="Aegis impact this week"
+        >
+          {/* Each tile is its own deep-link destination so the hero row
+              works as a real navigation surface, not just decoration.
+              An investigator who sees "12 anomalies this week" can
+              click directly into the filtered Runs view rather than
+              scrolling down to the CIL callout to find the link. */}
+          <OutcomeTile
+            label="Risky actions prevented"
+            value={stats.preventedThisWeek}
+            color="var(--error)"
+            icon={Shield}
+            href="/dashboard/approvals"
+            footnote={
+              stats.preventedThisWeek > 0
+                ? `${stats.blockedThisWeek} blocked · ${stats.preventedThisWeek - stats.blockedThisWeek} held for review`
+                : 'No risky actions this week'
+            }
+          />
+          <OutcomeTile
+            label="CIL anomalies surfaced"
+            value={stats.anomaliesThisWeek}
+            color="var(--warning)"
+            icon={Sparkles}
+            href="/dashboard/runs?cil=anomalies"
+            footnote={
+              stats.anomaliesThisWeek > 0
+                ? 'What static policies would have missed'
+                : 'No anomalies this week'
+            }
+          />
+          <OutcomeTile
+            label="Tools governed"
+            value={stats.toolsGovernedThisWeek}
+            color="var(--primary-base)"
+            icon={Inbox}
+            href="/dashboard/connectors"
+            footnote={
+              stats.toolsGovernedThisWeek > 1
+                ? 'Across the full agent surface'
+                : 'GitHub today; multi-tool shipping'
+            }
+          />
+          <OutcomeTile
+            label="Decisions evaluated"
+            value={stats.runsThisWeek}
+            color="var(--success)"
+            icon={CheckCircle2}
+            href="/dashboard/runs"
+            footnote={`${stats.activeSessions} active sessions right now`}
+          />
+        </motion.section>
+
+        {/* ─── CIL anomaly callout ──────────────────────────────────────
+            The moat slide made concrete. Lists the most recent
+            behavioral-baseline anomalies the Contextual Intelligence
+            Layer flagged — each with the connector mark, the tool that
+            tripped it, and a one-line reason. Each row links into
+            Runs so a reviewer can drill in.
+
+            Empty state is a positive: "Baselines healthy" reads as
+            "your fleet is calm" not "nothing's working." */}
+        <motion.section
+          className="relative mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.2 }}
+        >
+          {/* Inset orange→white wash — same treatment as the Decision
+              Overview hero so the CIL callout reads as part of the
+              same hero family. 4px inset on all sides, fades to
+              fully transparent before mid-card. The warning tone is
+              now carried by the icon hue (when anomalies present),
+              not by tinting the whole surface. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-1 rounded-[8px]"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(250, 115, 25, 0.07) 0%, rgba(250, 115, 25, 0.03) 28%, rgba(255, 255, 255, 0) 60%)',
+            }}
+          />
+          <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-soft-200)] px-5 py-3">
+            <div className="flex items-center gap-2.5">
+              {/* Canonical IconMark — concentric sticker with the
+                  Sparkles icon hued to warning when anomalies are
+                  present, neutral when baselines are healthy. */}
+              <IconMark
+                icon={Sparkles}
+                color={
+                  anomalousRuns.length > 0
+                    ? 'var(--warning)'
+                    : 'var(--neutral-soft-400)'
+                }
+              />
+              <div>
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
+                  Contextual Intelligence
+                </p>
+                <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                  {anomalousRuns.length > 0
+                    ? `${stats.anomaliesThisWeek} ${stats.anomaliesThisWeek === 1 ? 'anomaly' : 'anomalies'} surfaced this week`
+                    : 'Baselines healthy'}
+                </h2>
+              </div>
+            </div>
+            {/* Deep-link header CTA — when anomalies are present, route
+                straight to the filtered Runs view so the reviewer sees
+                the same subset the callout is showing, not the full
+                table mixed with non-anomalous rows. */}
+            <Link
+              href={
+                anomalousRuns.length > 0
+                  ? '/dashboard/runs?cil=anomalies'
+                  : '/dashboard/runs'
+              }
+              className="group inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] transition-colors hover:text-[var(--primary-base)]"
+            >
+              {anomalousRuns.length > 0 ? 'View all flagged' : 'View all runs'}
+              <ArrowUpRight
+                className="h-3 w-3 transition-transform group-hover:-translate-y-px group-hover:translate-x-px"
+                strokeWidth={2}
+              />
+            </Link>
+          </div>
+
+          {anomalousRuns.length > 0 ? (
+            <ul className="relative divide-y divide-[var(--stroke-soft-200)]">
+              {anomalousRuns.map((run) => (
+                <AnomalyListItem key={run.id} run={run} />
+              ))}
+            </ul>
+          ) : (
+            <div className="relative px-5 py-6">
+              <p className="text-[12.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                CIL hasn&apos;t detected any behavioral outliers in the last 7 days.
+                Each agent in this workspace is operating within its baseline
+                tool, file, and timing distribution. We&apos;re still watching.
+              </p>
+            </div>
+          )}
+        </motion.section>
 
         {/* ─── Hero — Decision distribution ─────────────────────────── */}
         <motion.section
@@ -850,4 +1051,214 @@ function SectionIcon({ icon: Icon }: { icon: LucideIcon }) {
       aria-hidden
     />
   );
+}
+
+/**
+ * AnomalyListItem — one row in the dashboard's CIL anomaly callout.
+ *
+ * Connector mark + tool name + agent + one-line reason + relative time.
+ * Each row links to the Runs page; in a follow-up we can deep-link to
+ * the specific run's expanded view once we add a URL-driven expansion.
+ */
+function AnomalyListItem({ run }: { run: SessionAction }) {
+  const connector = getConnectorForTool(run.tool_name);
+  return (
+    <li>
+      {/* Deep-link the anomaly row into the filtered Runs view so the
+          reviewer lands on a table already constrained to CIL-flagged
+          actions. Clicking through to an unfiltered /runs (the old
+          behaviour) lost the very context the user expressed. */}
+      <Link
+        href="/dashboard/runs?cil=anomalies"
+        className="group block px-5 py-3 transition-colors duration-150 hover:bg-[var(--primary-lighter)]/40"
+      >
+        <div className="flex items-start gap-3">
+          {/* Canonical concentric IconMark — outer ring + inner sticker.
+              The connector logo (or AlertTriangle fallback for unmatched
+              tools) sits inside the inner sticker so the list item's
+              identity anchor reads at the same scale as the dashboard's
+              other IconMark surfaces. */}
+          <div
+            aria-hidden
+            className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center"
+          >
+            <div className="absolute h-11 w-11 rounded-full border border-[var(--stroke-soft-200)]" />
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-[0_1px_2px_rgba(23,23,23,0.05)] ring-1 ring-[var(--stroke-soft-200)]">
+              {connector ? (
+                <ConnectorIcon id={connector} size={16} />
+              ) : (
+                <AlertTriangle
+                  className="h-4 w-4 text-[var(--warning)]"
+                  strokeWidth={2}
+                />
+              )}
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--warning-dark)]">
+                Anomaly
+              </span>
+              <span className="text-[11px] text-[var(--neutral-soft-400)]">
+                {run.agent_name}
+              </span>
+              <span className="text-[11px] text-[var(--neutral-soft-400)]">·</span>
+              <CodeChip>{run.tool_name}</CodeChip>
+            </div>
+            {run.anomaly_reason && (
+              <p className="mt-1 text-[12.5px] leading-[1.45] text-[var(--neutral-strong-950)]">
+                {run.anomaly_reason}
+              </p>
+            )}
+            {run.target_repo && (
+              <p className="mt-0.5 text-[11px] text-[var(--neutral-soft-400)]">
+                {run.target_repo}
+                {run.target_branch ? ` · ${run.target_branch}` : ''}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <RelativeTime
+              timestamp={run.timestamp}
+              className="text-[11px] text-[var(--neutral-soft-400)]"
+            />
+            <ChevronRight
+              className="h-3 w-3 text-[var(--neutral-soft-400)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100"
+              strokeWidth={2}
+              aria-hidden
+            />
+          </div>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * Outcome tile — one of four cells in the dashboard's outcome hero row.
+ *
+ * Big tabular number, semantic color, footnote underneath. Tone-colored
+ * micro-shadow under the icon ties the visual treatment back to the
+ * notification panel's icon marks, so the dashboard feels like a single
+ * design system not a collage.
+ *
+ * Numbers come from the `stats` memo above. Footnotes are short,
+ * context-aware strings so this tile reads as a sentence not a stat.
+ */
+function OutcomeTile({
+  label,
+  value,
+  color,
+  icon: Icon,
+  footnote,
+  href,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  icon: LucideIcon;
+  footnote?: string;
+  /** Optional deep-link destination. When set, the entire tile becomes
+   *  clickable and the footnote gains a hover arrow so the affordance
+   *  is clear without changing the calm stat-tile presentation. */
+  href?: string;
+}) {
+  const interactive = !!href;
+  // Compact redesign — synthesized from Resend's metrics dashboard and
+  // Rox's enterprise stat strip (researched via Refero). Replaces the
+  // heavy 30-34px value + concentric 44×44 IconMark + radial corner
+  // glow with a restrained pattern: small 24×24 sticker icon, 22-24px
+  // numeric value, no tone-tinted background, AlignUI-grade typography.
+  //
+  // Hover treatment scales with interactivity: interactive tiles lift +
+  // shift border tone; passive tiles just bump the shadow slightly so
+  // they still feel alive without suggesting a click target.
+  // Lift via Framer Motion (GPU-composited translate3d) instead of
+  // CSS `hover:-translate-y` — same pattern as the Agents, PolicyPack,
+  // and Connectors cards. Border + shadow stay on CSS transitions so
+  // they settle a frame before the motion completes.
+  const baseClass = interactive
+    ? 'group relative block overflow-hidden rounded-[10px] border border-[var(--stroke-soft-200)] bg-white p-3.5 shadow-[0_1px_2px_rgba(23,23,23,0.04)] transition-[box-shadow,border-color] duration-[220ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:border-[var(--primary-base)]/30 hover:shadow-[0_8px_20px_rgba(23,23,23,0.06),0_2px_6px_rgba(250,115,25,0.05)]'
+    : 'group relative block overflow-hidden rounded-[10px] border border-[var(--stroke-soft-200)] bg-white p-3.5 shadow-[0_1px_2px_rgba(23,23,23,0.04)] transition-shadow duration-200 hover:shadow-[0_3px_8px_rgba(23,23,23,0.05),0_1px_2px_rgba(23,23,23,0.04)]';
+  const focusClass = interactive
+    ? ' focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-alpha-24)]'
+    : '';
+  const content = (
+    <>
+      {/* Header row — small 24×24 sticker (no concentric ring, that's
+          reserved for the heavier IconMark surfaces) carrying the
+          tone-coloured icon, followed by the uppercase eyebrow label.
+          Inline always: at 24px the sticker is small enough that even
+          the narrowest 133px-wide tile fits the icon + label without
+          wrap-cramming. */}
+      <div className="relative flex items-center gap-2">
+        <span
+          aria-hidden
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_1px_2px_rgba(23,23,23,0.05)] ring-1 ring-[var(--stroke-soft-200)]"
+        >
+          <Icon className="h-3 w-3" style={{ color }} strokeWidth={2.25} />
+        </span>
+        <p className="min-w-0 truncate text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[var(--neutral-soft-400)]">
+          {label}
+        </p>
+      </div>
+      <p
+        className="relative mt-2.5 text-[22px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-[var(--neutral-strong-950)] sm:text-[24px]"
+      >
+        {value.toLocaleString()}
+      </p>
+      {footnote && (
+        <p className="relative mt-1 inline-flex items-center gap-1 text-[11px] leading-[1.4] text-[var(--neutral-sub-600)]">
+          {footnote}
+          {interactive && (
+            // Resting opacity 50% so the affordance is visible on touch
+            // devices (no hover state). Climbs to 100% on hover and
+            // nudges right + up so the click target reads as a verb.
+            <ArrowUpRight
+              aria-hidden
+              className="h-3 w-3 shrink-0 opacity-50 transition-all duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-px group-hover:opacity-100"
+              strokeWidth={2}
+              style={{ color }}
+            />
+          )}
+        </p>
+      )}
+    </>
+  );
+  if (interactive) {
+    // motion.div wraps the Link so the GPU-composited hover lift can
+    // run independently of the click-target (the Link itself). Focus
+    // styling stays on the Link because that's what receives keyboard
+    // focus — putting focus-visible on the motion.div wouldn't ever
+    // light up since the wrapper isn't tabbable.
+    return (
+      <motion.div
+        whileHover={{
+          y: -3,
+          transition: { duration: 0.26, ease: [0.32, 0.72, 0.32, 1] },
+        }}
+        whileTap={{
+          y: -1,
+          transition: { duration: 0.12, ease: [0.4, 0, 0.2, 1] },
+        }}
+      >
+        <Link href={href!} className={baseClass + focusClass}>
+          <Inner />
+        </Link>
+      </motion.div>
+    );
+  }
+  return (
+    <div className={baseClass}>
+      <Inner />
+    </div>
+  );
+
+  // Inner is declared down here so we can share the body between the
+  // interactive (Link) and non-interactive (div) variants without
+  // duplicating the JSX. React allows this hoisting because Inner is
+  // just a JSX-returning function, not a component with state.
+  function Inner() {
+    return content;
+  }
 }

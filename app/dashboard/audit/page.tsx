@@ -31,6 +31,9 @@ import { AuditSkeleton } from '@/components/ui/PageSkeletons';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { CodeChip } from '@/components/ui/CodeChip';
+import { ConnectorIcon, getConnectorForTool } from '@/components/ui/ConnectorMark';
+import { AnomalyChip } from '@/components/ui/AnomalyChip';
+import { DelegationChain } from '@/components/ui/DelegationChain';
 import { FilterChip } from '@/components/ui/FilterChip';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -543,14 +546,29 @@ function AuditRow({
           </div>
         </TD>
         <TD>
-          <CodeChip>{event.tool_name}</CodeChip>
+          {/* Connector mark inline with the tool name — same treatment
+              as the Runs page so the multi-tool story reads as a single
+              visual primitive across surfaces. */}
+          <span className="inline-flex items-center gap-1.5">
+            {(() => {
+              const connector = getConnectorForTool(event.tool_name);
+              return connector ? <ConnectorIcon id={connector} size={14} /> : null;
+            })()}
+            <CodeChip>{event.tool_name}</CodeChip>
+          </span>
         </TD>
         <TD className="text-[var(--neutral-sub-600)]">
           {truncate(event.action_summary, 40)}
         </TD>
         <TD className="text-[var(--neutral-sub-600)]">{event.target_repo}</TD>
         <TD>
-          <DecisionBadge decision={event.decision} />
+          {/* Decision + CIL anomaly stacked vertically. The chip
+              draws the eye to anomalous rows when scanning a long
+              audit trail. Reason surfaces on hover. */}
+          <div className="flex flex-col items-start gap-1">
+            <DecisionBadge decision={event.decision} />
+            <AnomalyChip anomaly={event.anomaly} reason={event.anomaly_reason} />
+          </div>
         </TD>
         <TD className="w-8 pr-3 text-right">
           <ChevronDown
@@ -567,6 +585,23 @@ function AuditRow({
       >
       {isExpanded && (
         <TRExpanded key="expanded" colSpan={7}>
+          {/* CIL anomaly callout — full variant when present. */}
+          {event.anomaly && (
+            <div className="mb-3">
+              <AnomalyChip
+                anomaly
+                reason={event.anomaly_reason}
+                variant="full"
+              />
+            </div>
+          )}
+          {/* Agent delegation chain — SOC 2-grade evidence: who acted,
+              under what role, in what scope, with what expiry. */}
+          {event.delegation && (
+            <div className="mb-3">
+              <DelegationChain delegation={event.delegation} variant="full" />
+            </div>
+          )}
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--neutral-soft-400)]">
             Full Summary
           </p>

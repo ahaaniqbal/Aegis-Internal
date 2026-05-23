@@ -244,13 +244,13 @@ export default function SettingsPage() {
             transition={{ duration: DUR.default, ease: EASE.out }}
           >
             <header className="mb-6">
-              <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]">
                 Settings
               </p>
-              <h1 className="text-[24px] font-semibold leading-[1.15] tracking-[-0.03em] text-[var(--neutral-strong-950)]">
+              <h1 className="text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[var(--neutral-strong-950)]">
                 {activeSection.label}
               </h1>
-              <p className="mt-1.5 text-[13.5px] text-[var(--neutral-sub-600)]">
+              <p className="mt-2 text-[13.5px] text-[var(--neutral-sub-600)]">
                 {SECTION_DESCRIPTIONS[active]}
               </p>
             </header>

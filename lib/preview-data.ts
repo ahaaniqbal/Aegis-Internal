@@ -82,7 +82,20 @@ const BRANCHES = [
   'chore/dependency-bump',
 ];
 
-const TOOLS = [
+// ── Multi-connector tool catalog ─────────────────────────────────────────
+//
+// Tools are partitioned by connector so demo data can show a realistic mix
+// of agent actions across GitHub + Slack (and additional connectors as
+// they ship). The split also lets each connector ship its own action-phrase
+// vocabulary so the demo doesn't read as "agent pushed code to Slack".
+//
+// Weighting: GitHub is still the dominant surface (the agent's primary
+// job is shipping code), so most actions land in GitHub. Slack appears as
+// the comms surface — agent posts status updates, replies to threads,
+// occasionally invites teammates. This matches what real cross-tool agent
+// sessions look like.
+
+const GITHUB_TOOLS = [
   'create_or_update_file',
   'get_file_contents',
   'list_repository_files',
@@ -101,7 +114,273 @@ const TOOLS = [
   'create_branch',
 ];
 
-const ACTION_PHRASES = [
+const SLACK_TOOLS = [
+  'list_channels',
+  'list_users',
+  'get_channel_history',
+  'get_thread_replies',
+  'search_messages',
+  'post_message',
+  'post_thread_reply',
+  'add_reaction',
+  'upload_file',
+  'invite_user_to_channel',
+  'delete_message',
+  'archive_channel',
+  'kick_user',
+];
+
+const LINEAR_TOOLS = [
+  'list_issues',
+  'get_issue',
+  'list_projects',
+  'get_project',
+  'search_issues',
+  'list_teams',
+  'list_users',
+  'create_issue',
+  'update_issue',
+  'add_issue_comment',
+  'create_subtask',
+  'move_issue',
+  'assign_issue',
+  'close_issue',
+  'set_priority',
+  'archive_issue',
+];
+
+const JIRA_TOOLS = [
+  'list_issues',
+  'get_issue',
+  'search_issues',
+  'list_projects',
+  'list_boards',
+  'create_issue',
+  'update_issue',
+  'add_comment',
+  'transition_issue',
+  'assign_issue',
+  'create_subtask',
+  'delete_issue',
+  'archive_project',
+];
+
+const GITHUB_ACTIONS_TOOLS = [
+  'list_workflows',
+  'get_workflow',
+  'list_workflow_runs',
+  'get_workflow_run',
+  'list_workflow_jobs',
+  'get_run_logs',
+  'list_secrets',
+  'dispatch_workflow',
+  'rerun_workflow',
+  'cancel_workflow',
+  'update_secret',
+  'delete_secret',
+  'delete_workflow_run',
+];
+
+const TERRAFORM_TOOLS = [
+  'plan',
+  'show',
+  'state_list',
+  'state_show',
+  'output',
+  'workspace_list',
+  'workspace_select',
+  'validate',
+  'fmt_check',
+  'apply',
+  'destroy',
+  'state_rm',
+  'state_mv',
+  'import',
+  'taint',
+  'workspace_new',
+  'workspace_delete',
+];
+
+const POSTGRES_TOOLS = [
+  'query_select',
+  'describe_table',
+  'list_tables',
+  'list_databases',
+  'show_indexes',
+  'show_constraints',
+  'explain_plan',
+  'query_insert',
+  'query_update',
+  'create_table',
+  'alter_table',
+  'create_index',
+  'query_delete',
+  'drop_table',
+  'truncate_table',
+  'drop_index',
+  'run_migration',
+];
+
+const DATADOG_TOOLS = [
+  'list_dashboards',
+  'get_dashboard',
+  'list_monitors',
+  'get_monitor',
+  'search_logs',
+  'query_metrics',
+  'list_synthetics',
+  'get_synthetic_check',
+  'list_incidents',
+  'get_incident',
+  'list_events',
+  'silence_monitor',
+  'update_monitor',
+  'create_dashboard',
+  'update_dashboard',
+  'post_event',
+  'add_synthetic_check',
+  'acknowledge_incident',
+  'delete_dashboard',
+  'delete_monitor',
+  'delete_synthetic_check',
+  'resolve_incident_force',
+];
+
+const SENTRY_TOOLS = [
+  'list_projects',
+  'list_issues',
+  'get_issue',
+  'list_releases',
+  'get_release',
+  'get_event',
+  'list_alerts',
+  'assign_issue',
+  'resolve_issue',
+  'mark_ignored',
+  'add_issue_comment',
+  'set_status',
+  'create_release',
+  'delete_issue',
+  'bulk_resolve',
+  'delete_project',
+];
+
+const KUBERNETES_TOOLS = [
+  'kubectl_get',
+  'kubectl_describe',
+  'kubectl_logs',
+  'kubectl_top',
+  'kubectl_explain',
+  'kubectl_diff',
+  'kubectl_apply',
+  'kubectl_patch',
+  'kubectl_scale',
+  'kubectl_rollout',
+  'kubectl_label',
+  'kubectl_annotate',
+  'kubectl_set_image',
+  'kubectl_delete',
+  'kubectl_exec',
+  'kubectl_drain',
+  'kubectl_cordon',
+  'kubectl_taint',
+];
+
+const CLOUDFLARE_TOOLS = [
+  'list_zones',
+  'get_zone',
+  'list_dns_records',
+  'get_dns_record',
+  'list_workers',
+  'get_worker',
+  'list_kv_namespaces',
+  'list_r2_buckets',
+  'get_pages_project',
+  'create_dns_record',
+  'update_dns_record',
+  'deploy_worker',
+  'update_worker',
+  'update_kv_pair',
+  'create_kv_namespace',
+  'create_r2_bucket',
+  'delete_dns_record',
+  'delete_worker',
+  'delete_zone',
+  'purge_cache',
+  'delete_pages_project',
+];
+
+const NOTION_TOOLS = [
+  'get_page',
+  'search_pages',
+  'query_database',
+  'get_database',
+  'list_users',
+  'get_comments',
+  'create_page',
+  'update_page',
+  'append_block',
+  'create_database',
+  'update_database',
+  'add_comment',
+  'delete_page',
+  'archive_page',
+  'share_page_publicly',
+  'delete_database',
+];
+
+// Combined catalog for backwards compatibility with anything that wants a
+// flat tool list (e.g. PREVIEW_ROOM_TOOLS role-based allowlists below).
+const TOOLS = [
+  ...GITHUB_TOOLS,
+  ...SLACK_TOOLS,
+  ...LINEAR_TOOLS,
+  ...JIRA_TOOLS,
+  ...GITHUB_ACTIONS_TOOLS,
+  ...TERRAFORM_TOOLS,
+  ...POSTGRES_TOOLS,
+  ...DATADOG_TOOLS,
+  ...SENTRY_TOOLS,
+  ...KUBERNETES_TOOLS,
+  ...CLOUDFLARE_TOOLS,
+  ...NOTION_TOOLS,
+];
+
+type ConnectorSlug =
+  | 'github'
+  | 'slack'
+  | 'linear'
+  | 'jira'
+  | 'github-actions'
+  | 'terraform'
+  | 'postgres'
+  | 'datadog'
+  | 'sentry'
+  | 'kubernetes'
+  | 'cloudflare'
+  | 'notion';
+
+// Lookup map: tool name → connector slug. Used by phraseForTool() and
+// argsForTool() to render coherent rows regardless of which connector
+// the random picker landed on.
+const TOOL_TO_CONNECTOR: Record<string, ConnectorSlug> = (() => {
+  const m: Record<string, ConnectorSlug> = {};
+  for (const t of GITHUB_TOOLS) m[t] = 'github';
+  for (const t of SLACK_TOOLS) m[t] = 'slack';
+  for (const t of LINEAR_TOOLS) m[t] = 'linear';
+  for (const t of JIRA_TOOLS) m[t] = 'jira';
+  for (const t of GITHUB_ACTIONS_TOOLS) m[t] = 'github-actions';
+  for (const t of TERRAFORM_TOOLS) m[t] = 'terraform';
+  for (const t of POSTGRES_TOOLS) m[t] = 'postgres';
+  for (const t of DATADOG_TOOLS) m[t] = 'datadog';
+  for (const t of SENTRY_TOOLS) m[t] = 'sentry';
+  for (const t of KUBERNETES_TOOLS) m[t] = 'kubernetes';
+  for (const t of CLOUDFLARE_TOOLS) m[t] = 'cloudflare';
+  for (const t of NOTION_TOOLS) m[t] = 'notion';
+  return m;
+})();
+
+const GITHUB_ACTION_PHRASES = [
   'Open a pull request to refactor the approval queue handler',
   'Push a fix for the race condition in policy evaluation',
   'Read the README to understand repository layout',
@@ -119,6 +398,262 @@ const ACTION_PHRASES = [
   'Patch the rate limiter to use Redis instead of in-memory',
   'Pull the latest schema for the audit table',
 ];
+
+const SLACK_ACTION_PHRASES = [
+  'Post a deployment status update in #engineering',
+  'Reply to the on-call thread with the policy evaluator fix',
+  'Notify #releases that the freeze window starts in 30 minutes',
+  'Search recent messages for the bug report Mujtaba flagged',
+  'List active members of the platform team for assignment',
+  'Upload the policy evaluation logs to the #incident channel',
+  'React with a checkmark on the PR review request',
+  'DM the on-call engineer about a blocked approval',
+  'Pull the conversation history from #aegis-eng for context',
+  'Invite the new design partner contact to #early-access',
+  'Tag the platform-lead role for review',
+  'Archive the #wip-rate-limits channel after rollout',
+];
+
+const LINEAR_ACTION_PHRASES = [
+  'Pull AEG-247 to read acceptance criteria before coding',
+  'Move AEG-301 from In Review to Done',
+  'Add a comment summarizing the policy evaluator fix on AEG-189',
+  'Search active P1 issues for the rate-limit incident',
+  'Create a subtask for the audit-export migration work',
+  'Assign AEG-412 to mujtaba for review',
+  'List all open P0 issues to triage before standup',
+  'Re-prioritize AEG-501 from P3 to P2 after customer flag',
+  'Get the latest activity timeline for AEG-256',
+  'Close AEG-128 after merging the freeze-window fix',
+];
+
+const JIRA_ACTION_PHRASES = [
+  'Pull AEGIS-247 to read acceptance criteria before coding',
+  'Transition AEGIS-301 from In Review to Done',
+  'Add a comment summarizing the rollout plan on AEGIS-189',
+  'Search active P1 issues in the SECURITY board',
+  'Create a subtask for the audit-export migration work',
+  'Assign AEGIS-412 to platform-team for review',
+];
+
+const GITHUB_ACTIONS_PHRASES = [
+  'Dispatch the deploy-staging workflow with the latest commit',
+  'Re-run the failed unit-test job from yesterday',
+  'List recent workflow runs to triage the flaky test',
+  'Cancel the in-flight build that is targeting prod',
+  'Rotate the STAGING_DB_URL secret per quarterly policy',
+  'Pull job logs for the failing migration check',
+  'Get the latest run status for the release-tag workflow',
+];
+
+const TERRAFORM_ACTION_PHRASES = [
+  'Run terraform plan against the staging workspace',
+  'Show the current state for the api-gateway module',
+  'Validate the new EKS cluster module configuration',
+  'List workspaces to identify the right target for the change',
+  'Output the database endpoint after the plan completes',
+  'Format-check the rate-limiter module before opening a PR',
+  'Apply the network-tagging change to the staging workspace',
+  'Import the existing S3 bucket into Terraform state',
+];
+
+const POSTGRES_ACTION_PHRASES = [
+  'Query recent audit rows to verify policy decisions',
+  'Describe the audit_events table to confirm the schema',
+  'Run an EXPLAIN on the slow approval-queue query',
+  'List indexes on the runs table to find a missing covering index',
+  'Insert a backfill row for the missing token_meter session',
+  'Update the policy_status column for archived rooms',
+  'Create a covering index on (room_id, decided_at)',
+  'Run the audit-retention migration against the staging DB',
+  'Delete soft-deleted approval rows older than 90 days',
+  'Drop the legacy approvals_v1 table after migration window',
+];
+
+const DATADOG_ACTION_PHRASES = [
+  'Pull the last 6h of error logs from the approval-queue service',
+  'Check the p95 latency monitor before declaring the rollout safe',
+  'Read the on-call dashboard to confirm no active incidents',
+  'Query metrics for the runs ingest pipeline since deploy',
+  'List active synthetic checks for the public API',
+  'Acknowledge the noisy ECS Task Failed monitor while we investigate',
+  'Silence the staging policy-evaluator monitor during the migration',
+  'Post a deployment event so the dashboard timeline reflects the release',
+  'Update the SLO dashboard widget to track the new approval p99',
+  'Add a synthetic check for the new /api/connectors endpoint',
+  'Delete the deprecated approvals-v1 monitor after migration window',
+];
+
+const SENTRY_ACTION_PHRASES = [
+  'List unresolved errors in the policy-evaluator project',
+  'Read the stack trace for the spike in TimeoutError exceptions',
+  'Inspect release health for the 4.18.0 deploy before promoting',
+  'Pull the event payload from the latest 500 error',
+  'Assign the runaway-loop error cluster to the policy-eval owner',
+  'Resolve the issue cluster after shipping the fix',
+  'Ignore the known third-party Slack-SDK timeout cluster',
+  'Add a comment with the fix PR link to the resolved issue',
+  'Create a release entry for 4.18.0 with the commit set',
+  'Bulk-resolve everything in the approvals namespace',
+  'Delete the test-fixture project that got created by mistake',
+];
+
+const KUBERNETES_ACTION_PHRASES = [
+  'Get pods in the approvals namespace to confirm the rollout completed',
+  'Describe the policy-evaluator deployment to inspect env vars',
+  'Tail logs for the runs-ingest pod chasing a crashloop',
+  'Run kubectl top to identify the memory-hot pod on the staging cluster',
+  'Diff the staging manifest against what is applied',
+  'Apply the new HorizontalPodAutoscaler for the approvals service',
+  'Scale the policy-evaluator deployment to 8 replicas for the launch',
+  'Patch the runs-ingest deployment image to the 4.18.0 tag',
+  'Roll out the staging policy-evaluator restart',
+  'Set image on the approvals-api deployment to the canary tag',
+  'Delete the failed rollout job left behind from yesterday',
+  'Exec into a runs-ingest pod to reproduce the OOM live',
+  'Drain node ip-10-0-3-141 ahead of the scheduled maintenance',
+];
+
+const CLOUDFLARE_ACTION_PHRASES = [
+  'List zones to confirm the runaegis.co apex DNS records',
+  'Read the worker config for the api.runaegis.co edge function',
+  'Inspect KV namespaces holding the policy-cache shards',
+  'Check R2 buckets used by the audit-export pipeline',
+  'Create a CNAME for status.runaegis.co pointing at the status page',
+  'Update the api.runaegis.co worker route after rolling the deploy',
+  'Deploy the policy-evaluator worker to the canary route',
+  'Update a KV pair to flip the read-only feature flag for staging',
+  'Create a new KV namespace for the connectors-v2 rollout',
+  'Delete the unused legacy preview-staging DNS record',
+  'Purge cache for /api/runs to flush the bad payload',
+  'Delete the deprecated edge-router worker after migration',
+];
+
+const NOTION_ACTION_PHRASES = [
+  'Read the policy authoring RFC before drafting the schema change',
+  'Search Notion for the on-call runbook the incident touched',
+  'Query the connectors database to list every roadmap item',
+  'Pull the comments thread on the launch-readiness checklist',
+  'List the platform team members for the new room',
+  'Create a meeting-notes page for the weekly governance sync',
+  'Update the public docs page with the new MCP endpoint URL',
+  'Append a status note to the launch tracker',
+  'Create a new database for tracking customer pilot logos',
+  'Add a comment to the SOC 2 readiness page',
+  'Delete the duplicate draft page accidentally created by the agent',
+  'Share the audit-export how-to publicly so customers can self-serve',
+];
+
+const ACTION_PHRASES = [
+  ...GITHUB_ACTION_PHRASES,
+  ...SLACK_ACTION_PHRASES,
+  ...LINEAR_ACTION_PHRASES,
+  ...JIRA_ACTION_PHRASES,
+  ...GITHUB_ACTIONS_PHRASES,
+  ...TERRAFORM_ACTION_PHRASES,
+  ...POSTGRES_ACTION_PHRASES,
+  ...DATADOG_ACTION_PHRASES,
+  ...SENTRY_ACTION_PHRASES,
+  ...KUBERNETES_ACTION_PHRASES,
+  ...CLOUDFLARE_ACTION_PHRASES,
+  ...NOTION_ACTION_PHRASES,
+];
+
+/**
+ * Return the connector a tool belongs to.
+ */
+function connectorForTool(tool: string): ConnectorSlug {
+  return TOOL_TO_CONNECTOR[tool] ?? 'github';
+}
+
+/**
+ * Connector mix for the demo workspace. Tuned to look like a realistic
+ * cross-tool engineering agent fleet: GitHub dominates (the agent's
+ * core job is code), Slack is the second most-used (comms checkpoints
+ * throughout sessions), Linear is third (planning context lookups),
+ * the rest taper. The numbers are guidance, not gospel — adjust to
+ * make the demo data feel right.
+ */
+const CONNECTOR_WEIGHTS: Array<{ slug: ConnectorSlug; pool: readonly string[]; weight: number }> = [
+  // Code + comms still dominate — that's the reality of an
+  // engineering agent fleet.
+  { slug: 'github',          pool: GITHUB_TOOLS,          weight: 30 },
+  { slug: 'slack',           pool: SLACK_TOOLS,           weight: 14 },
+  { slug: 'linear',          pool: LINEAR_TOOLS,          weight: 10 },
+  { slug: 'github-actions',  pool: GITHUB_ACTIONS_TOOLS,  weight: 8 },
+  { slug: 'postgres',        pool: POSTGRES_TOOLS,        weight: 6 },
+  { slug: 'terraform',       pool: TERRAFORM_TOOLS,       weight: 5 },
+  { slug: 'jira',            pool: JIRA_TOOLS,            weight: 3 },
+  // New Stage 2 connectors. Observability + ops surfaces should
+  // appear often enough that the demo data tells the "incident loop"
+  // story without drowning out core code work.
+  { slug: 'datadog',         pool: DATADOG_TOOLS,         weight: 7 },
+  { slug: 'sentry',          pool: SENTRY_TOOLS,          weight: 6 },
+  { slug: 'kubernetes',      pool: KUBERNETES_TOOLS,      weight: 5 },
+  { slug: 'cloudflare',      pool: CLOUDFLARE_TOOLS,      weight: 3 },
+  { slug: 'notion',          pool: NOTION_TOOLS,          weight: 3 },
+];
+
+/**
+ * Weighted pick across all 7 connector tool pools. Replaces the
+ * earlier 75/25 GitHub/Slack picker so the demo workspace can tell
+ * the full control-plane story across every tool an engineering
+ * agent touches.
+ */
+function pickToolWeighted(): string {
+  const total = CONNECTOR_WEIGHTS.reduce((s, c) => s + c.weight, 0);
+  const r = rand() * total;
+  let acc = 0;
+  for (const c of CONNECTOR_WEIGHTS) {
+    acc += c.weight;
+    if (r < acc) return pick(c.pool);
+  }
+  return pick(GITHUB_TOOLS);
+}
+
+const PHRASES_BY_CONNECTOR: Record<ConnectorSlug, readonly string[]> = {
+  github: GITHUB_ACTION_PHRASES,
+  slack: SLACK_ACTION_PHRASES,
+  linear: LINEAR_ACTION_PHRASES,
+  jira: JIRA_ACTION_PHRASES,
+  'github-actions': GITHUB_ACTIONS_PHRASES,
+  terraform: TERRAFORM_ACTION_PHRASES,
+  postgres: POSTGRES_ACTION_PHRASES,
+  datadog: DATADOG_ACTION_PHRASES,
+  sentry: SENTRY_ACTION_PHRASES,
+  kubernetes: KUBERNETES_ACTION_PHRASES,
+  cloudflare: CLOUDFLARE_ACTION_PHRASES,
+  notion: NOTION_ACTION_PHRASES,
+};
+
+/**
+ * Pick an action phrase that matches the tool's connector so the
+ * `tool_name` + `action_summary` columns in Runs / Audit always tell
+ * a coherent story.
+ */
+function phraseForTool(tool: string): string {
+  const connector = connectorForTool(tool);
+  const pool = PHRASES_BY_CONNECTOR[connector] ?? GITHUB_ACTION_PHRASES;
+  return pick(pool);
+}
+
+const SLACK_CHANNELS = [
+  '#engineering',
+  '#aegis-eng',
+  '#releases',
+  '#incident',
+  '#on-call',
+  '#early-access',
+  '#wip-rate-limits',
+  '#announcements',
+];
+
+const LINEAR_ISSUE_IDS = ['AEG-247', 'AEG-301', 'AEG-189', 'AEG-412', 'AEG-501', 'AEG-256', 'AEG-128'];
+const JIRA_ISSUE_IDS = ['AEGIS-247', 'AEGIS-301', 'AEGIS-189', 'AEGIS-412'];
+const GH_WORKFLOWS = ['deploy-staging', 'deploy-prod', 'unit-tests', 'integration-tests', 'release-tag', 'security-scan'];
+const TERRAFORM_WORKSPACES = ['staging', 'production', 'dev', 'sandbox', 'data-platform'];
+const POSTGRES_DBS = ['aegis_app', 'aegis_audit', 'aegis_metrics', 'staging_replica'];
+const POSTGRES_TABLES = ['audit_events', 'runs', 'sessions', 'approvals', 'token_meter', 'rooms', 'members'];
 
 const DECISIONS = [
   { value: 'ALLOW',            weight: 60 },
@@ -197,31 +732,461 @@ const ONE_DAY = 24 * 60 * 60 * 1000;
 // Generate session IDs first so we can group runs into sessions of varying length.
 const SESSION_IDS = Array.from({ length: 14 }, () => uuid());
 
+// ── Session archetypes — coherent cross-tool agent journeys ──────────────
+//
+// Without these, every session is a random scatter of tool calls; the
+// Sessions table looks like 14 identical sessions, each with ~7 random
+// connectors. That's the opposite of what we want investors to see.
+//
+// With archetypes, each session has a discernible *story* — feature
+// dev (GitHub-heavy + Slack updates), data migration (Postgres + Slack
+// notifications), infra rollout (Terraform → GHActions deploy → Slack
+// post), etc. Sessions tell coherent stories and the multi-tool
+// control-plane claim becomes visible on first scan.
+//
+// Each archetype defines:
+//   - `primary`: the dominant connector for this session
+//   - `surfaces`: other connectors the agent dips into
+//   - `weight`: relative frequency in the pool of archetypes
+
+type SessionArchetype = {
+  name: string;
+  primary: ConnectorSlug;
+  surfaces: ConnectorSlug[];
+  weight: number;
+};
+
+const SESSION_ARCHETYPES: SessionArchetype[] = [
+  // Feature work: read a Linear ticket, code on GitHub, post status to Slack.
+  { name: 'feature_dev', primary: 'github', surfaces: ['github', 'linear', 'slack'], weight: 5 },
+  // Incident triage: agent starts in Slack, fans out to GitHub + Linear.
+  { name: 'incident_triage', primary: 'slack', surfaces: ['slack', 'github', 'linear'], weight: 2 },
+  // Pure code work — agent in a coding session, no comms.
+  { name: 'pure_code', primary: 'github', surfaces: ['github'], weight: 2 },
+  // Release: GH Actions deploy + GitHub + Slack notify.
+  { name: 'release_deploy', primary: 'github-actions', surfaces: ['github-actions', 'github', 'slack'], weight: 2 },
+  // Data migration: Postgres-heavy + Slack notifications.
+  { name: 'data_migration', primary: 'postgres', surfaces: ['postgres', 'slack', 'github'], weight: 1 },
+  // Infra change: Terraform-heavy + GHA validation + Slack.
+  { name: 'infra_change', primary: 'terraform', surfaces: ['terraform', 'github-actions', 'slack'], weight: 1 },
+  // Planning sweep: Linear + Jira + GitHub references.
+  { name: 'planning_sweep', primary: 'linear', surfaces: ['linear', 'jira', 'github'], weight: 1 },
+  // Stage 2 archetypes — the new connectors get their own coherent
+  // narratives so the demo shows them naturally, not as random noise.
+
+  // Incident loop: agent reads a Datadog alert → pulls Sentry trace
+  // → diffs the suspect commit on GitHub → posts status to Slack.
+  // This is the moat slide narrative.
+  { name: 'incident_loop',  primary: 'datadog',    surfaces: ['datadog', 'sentry', 'github', 'slack'], weight: 2 },
+  // Cluster ops: kubectl get / describe / rollout, occasionally
+  // touching GitHub for the manifest source of truth.
+  { name: 'cluster_ops',    primary: 'kubernetes', surfaces: ['kubernetes', 'github', 'slack'],        weight: 1 },
+  // Edge / DNS: Cloudflare worker + DNS changes, GHA workflow,
+  // Slack notify on launch.
+  { name: 'edge_deploy',    primary: 'cloudflare', surfaces: ['cloudflare', 'github-actions', 'slack'], weight: 1 },
+  // Docs sweep: agent reads RFCs / runbooks from Notion before
+  // taking action on the code. Cross-tool reads only.
+  { name: 'docs_lookup',    primary: 'notion',     surfaces: ['notion', 'github', 'linear'],            weight: 1 },
+];
+
+const SESSION_ARCHETYPE_TOTAL_WEIGHT = SESSION_ARCHETYPES.reduce(
+  (s, a) => s + a.weight,
+  0,
+);
+
+function pickArchetype(): SessionArchetype {
+  const r = rand() * SESSION_ARCHETYPE_TOTAL_WEIGHT;
+  let acc = 0;
+  for (const a of SESSION_ARCHETYPES) {
+    acc += a.weight;
+    if (r < acc) return a;
+  }
+  return SESSION_ARCHETYPES[0];
+}
+
+// Stable per-session archetype assignment. Picked once when the demo
+// dataset is built so every run in a given session_id follows the same
+// archetype's tool distribution.
+const ARCHETYPE_BY_SESSION_ID: Map<string, SessionArchetype> = new Map(
+  SESSION_IDS.map((id) => [id, pickArchetype()]),
+);
+
+const POOL_BY_CONNECTOR: Record<ConnectorSlug, readonly string[]> = {
+  github: GITHUB_TOOLS,
+  slack: SLACK_TOOLS,
+  linear: LINEAR_TOOLS,
+  jira: JIRA_TOOLS,
+  'github-actions': GITHUB_ACTIONS_TOOLS,
+  terraform: TERRAFORM_TOOLS,
+  postgres: POSTGRES_TOOLS,
+  datadog: DATADOG_TOOLS,
+  sentry: SENTRY_TOOLS,
+  kubernetes: KUBERNETES_TOOLS,
+  cloudflare: CLOUDFLARE_TOOLS,
+  notion: NOTION_TOOLS,
+};
+
+/**
+ * Pick a tool for a specific session's archetype. 65% of the time we
+ * sample from the archetype's primary connector; the rest from the
+ * archetype's surfaces array. That ratio is what makes sessions feel
+ * coherent — primary surface dominates, secondary surfaces sprinkle.
+ */
+function pickToolForSession(sessionId: string): string {
+  const archetype = ARCHETYPE_BY_SESSION_ID.get(sessionId);
+  if (!archetype) return pick(GITHUB_TOOLS);
+  const useSecondary = rand() < 0.35 && archetype.surfaces.length > 1;
+  const slug = useSecondary
+    ? pick(archetype.surfaces.filter((s) => s !== archetype.primary))
+    : archetype.primary;
+  return pick(POOL_BY_CONNECTOR[slug] ?? GITHUB_TOOLS);
+}
+
+/** Build a realistic args payload for a tool call. Slack and GitHub
+ *  have completely different argument shapes; keeping this aligned to
+ *  the tool keeps the Audit "raw payload" view (the JSON drawer) on
+ *  message instead of leaking GitHub-shaped args into a Slack row. */
+function argsForTool(tool: string, repo: string, branch: string): Record<string, unknown> {
+  // GitHub-side
+  switch (tool) {
+    case 'create_pull_request':
+      return { repo, title: 'Open PR for fix', base: 'main', head: branch };
+    case 'create_or_update_file':
+      return { repo, path: 'src/index.ts', branch, message: 'chore: update' };
+    case 'search_code':
+      return { q: 'evaluatePolicy', repo };
+    case 'get_file_contents':
+    case 'list_repository_files':
+    case 'get_repository':
+    case 'list_branches':
+    case 'list_issues':
+    case 'create_branch':
+    case 'get_pull_request':
+    case 'get_issue':
+    case 'create_issue':
+    case 'search_repositories':
+    case 'search_issues':
+    case 'get_latest_commit':
+    case 'push_files':
+      return { repo, branch };
+  }
+  const connector = connectorForTool(tool);
+
+  // Slack
+  if (connector === 'slack') {
+    const channel = pick(SLACK_CHANNELS);
+    switch (tool) {
+      case 'post_message':
+        return { channel, text: 'Deployment to staging is green. Promoting to prod in 10 minutes.' };
+      case 'post_thread_reply':
+        return { channel, thread_ts: '1716462100.000200', text: 'Fixed the race condition.' };
+      case 'add_reaction':
+        return { channel, timestamp: '1716462100.000200', name: 'white_check_mark' };
+      case 'upload_file':
+        return { channel, filename: 'policy-evaluator.log', filetype: 'text' };
+      case 'invite_user_to_channel':
+        return { channel, user_id: 'U02AB1CDEF' };
+      case 'delete_message':
+        return { channel, timestamp: '1716462100.000200' };
+      case 'archive_channel':
+        return { channel };
+      case 'kick_user':
+        return { channel, user_id: 'U02AB1CDEF' };
+      case 'list_channels':
+        return { limit: 100, exclude_archived: true };
+      case 'list_users':
+        return { limit: 200 };
+      case 'get_channel_history':
+        return { channel, limit: 50 };
+      case 'get_thread_replies':
+        return { channel, ts: '1716462100.000200' };
+      case 'search_messages':
+        return { query: 'rate limit' };
+    }
+    return { channel };
+  }
+
+  // Linear
+  if (connector === 'linear') {
+    const issueId = pick(LINEAR_ISSUE_IDS);
+    switch (tool) {
+      case 'list_issues':       return { team: 'AEG', state: 'open', limit: 50 };
+      case 'get_issue':         return { issue_id: issueId };
+      case 'list_projects':     return { team: 'AEG' };
+      case 'get_project':       return { project_id: 'proj_aegis_dashboard' };
+      case 'search_issues':     return { query: 'rate limit', team: 'AEG' };
+      case 'list_teams':        return {};
+      case 'list_users':        return { team: 'AEG' };
+      case 'create_issue':      return { team: 'AEG', title: 'Track rate-limit incident', priority: 2 };
+      case 'update_issue':      return { issue_id: issueId, title: 'Updated title from agent' };
+      case 'add_issue_comment': return { issue_id: issueId, body: 'Pushed fix in PR #2847' };
+      case 'create_subtask':    return { parent_id: issueId, title: 'Backfill audit rows' };
+      case 'move_issue':        return { issue_id: issueId, state: 'In Progress' };
+      case 'assign_issue':      return { issue_id: issueId, assignee: 'mujtaba' };
+      case 'close_issue':       return { issue_id: issueId };
+      case 'set_priority':      return { issue_id: issueId, priority: 1 };
+      case 'archive_issue':     return { issue_id: issueId };
+    }
+    return { issue_id: issueId };
+  }
+
+  // Jira
+  if (connector === 'jira') {
+    const issueId = pick(JIRA_ISSUE_IDS);
+    switch (tool) {
+      case 'list_issues':        return { project: 'AEGIS', status: 'In Progress', limit: 50 };
+      case 'get_issue':          return { issue_key: issueId };
+      case 'search_issues':      return { jql: 'project = AEGIS AND priority = High' };
+      case 'list_projects':      return {};
+      case 'list_boards':        return { project: 'AEGIS' };
+      case 'create_issue':       return { project: 'AEGIS', summary: 'Track rate-limit incident', priority: 'High' };
+      case 'update_issue':       return { issue_key: issueId, fields: { summary: 'Updated' } };
+      case 'add_comment':        return { issue_key: issueId, body: 'Pushed fix in PR #2847' };
+      case 'transition_issue':   return { issue_key: issueId, transition: 'In Review' };
+      case 'assign_issue':       return { issue_key: issueId, assignee: 'mujtaba' };
+      case 'create_subtask':     return { parent: issueId, summary: 'Backfill audit rows' };
+      case 'delete_issue':       return { issue_key: issueId };
+      case 'archive_project':    return { project: 'AEGIS' };
+    }
+    return { issue_key: issueId };
+  }
+
+  // GitHub Actions
+  if (connector === 'github-actions') {
+    const workflow = pick(GH_WORKFLOWS);
+    switch (tool) {
+      case 'list_workflows':       return { repo };
+      case 'get_workflow':         return { repo, workflow };
+      case 'list_workflow_runs':   return { repo, workflow, limit: 25 };
+      case 'get_workflow_run':     return { repo, run_id: 8742091 };
+      case 'list_workflow_jobs':   return { repo, run_id: 8742091 };
+      case 'get_run_logs':         return { repo, run_id: 8742091 };
+      case 'list_secrets':         return { repo };
+      case 'dispatch_workflow':    return { repo, workflow, ref: branch, inputs: { environment: 'staging' } };
+      case 'rerun_workflow':       return { repo, run_id: 8742091 };
+      case 'cancel_workflow':      return { repo, run_id: 8742091 };
+      case 'update_secret':        return { repo, name: 'STAGING_DB_URL', encrypted_value: '<redacted>' };
+      case 'delete_secret':        return { repo, name: 'STAGING_DB_URL' };
+      case 'delete_workflow_run':  return { repo, run_id: 8742091 };
+    }
+    return { repo, workflow };
+  }
+
+  // Terraform
+  if (connector === 'terraform') {
+    const workspace = pick(TERRAFORM_WORKSPACES);
+    switch (tool) {
+      case 'plan':              return { workspace, var_file: 'staging.tfvars' };
+      case 'show':              return { workspace, target: 'module.api_gateway' };
+      case 'state_list':        return { workspace };
+      case 'state_show':        return { workspace, address: 'aws_s3_bucket.audit_logs' };
+      case 'output':            return { workspace };
+      case 'workspace_list':    return {};
+      case 'workspace_select':  return { workspace };
+      case 'validate':          return { workspace };
+      case 'fmt_check':         return { workspace };
+      case 'apply':             return { workspace, auto_approve: false };
+      case 'destroy':           return { workspace, target: 'module.api_gateway' };
+      case 'state_rm':          return { workspace, address: 'aws_s3_bucket.legacy_audit_logs' };
+      case 'state_mv':          return { workspace, from: 'aws_s3_bucket.foo', to: 'aws_s3_bucket.bar' };
+      case 'import':            return { workspace, address: 'aws_s3_bucket.audit_logs', id: 'aegis-audit-prod' };
+      case 'taint':             return { workspace, address: 'aws_instance.api_gateway' };
+      case 'workspace_new':     return { name: 'feature-branch-1' };
+      case 'workspace_delete':  return { workspace: 'feature-branch-1' };
+    }
+    return { workspace };
+  }
+
+  // Postgres
+  if (connector === 'postgres') {
+    const db = pick(POSTGRES_DBS);
+    const table = pick(POSTGRES_TABLES);
+    switch (tool) {
+      case 'query_select':      return { database: db, sql: `SELECT * FROM ${table} ORDER BY created_at DESC LIMIT 50` };
+      case 'describe_table':    return { database: db, table };
+      case 'list_tables':       return { database: db };
+      case 'list_databases':    return {};
+      case 'show_indexes':      return { database: db, table };
+      case 'show_constraints':  return { database: db, table };
+      case 'explain_plan':      return { database: db, sql: `SELECT * FROM ${table} WHERE room_id = $1` };
+      case 'query_insert':      return { database: db, sql: `INSERT INTO ${table} (room_id, payload) VALUES ($1, $2)` };
+      case 'query_update':      return { database: db, sql: `UPDATE ${table} SET status = 'archived' WHERE room_id = $1` };
+      case 'create_table':      return { database: db, table: 'audit_archive', columns: '(id uuid, payload jsonb, archived_at timestamptz)' };
+      case 'alter_table':       return { database: db, table, change: 'ADD COLUMN archived_at timestamptz' };
+      case 'create_index':      return { database: db, table, columns: '(room_id, decided_at)' };
+      case 'query_delete':      return { database: db, sql: `DELETE FROM ${table} WHERE deleted_at < NOW() - INTERVAL '90 days'` };
+      case 'drop_table':        return { database: db, table: 'approvals_v1' };
+      case 'truncate_table':    return { database: db, table: 'audit_events_v1' };
+      case 'drop_index':        return { database: db, name: 'idx_legacy_decided_at' };
+      case 'run_migration':     return { database: db, migration: '0042_audit_retention.sql' };
+    }
+    return { database: db, table };
+  }
+
+  // GitHub (default fallback)
+  return { repo, branch };
+}
+
+// ── Contextual Intelligence Layer (CIL) demo signals ─────────────────────
+//
+// In production this is computed by a real baseline + statistical model.
+// For the demo, we synthesize plausible-looking signals correlated with
+// blast radius + decision so the pitch demo doesn't show "high risk" rows
+// that the policy engine cleanly ALLOWED.
+
+const BLAST_RISK_FLOOR: Record<string, number> = {
+  Low: 0.08,
+  Medium: 0.28,
+  High: 0.55,
+  Critical: 0.78,
+};
+
+function riskScoreFor(decision: string, blast: string): number {
+  // Base floor from blast radius, lifted further when the action also
+  // tripped a policy (DENY / REQUIRE_APPROVAL).
+  const base = BLAST_RISK_FLOOR[blast] ?? 0.12;
+  const decisionLift =
+    decision === 'DENY' ? 0.18 : decision === 'REQUIRE_APPROVAL' ? 0.12 : decision === 'REWRITE' ? 0.06 : 0;
+  const noise = (rand() - 0.5) * 0.1;
+  return Math.max(0, Math.min(1, base + decisionLift + noise));
+}
+
+// Realistic anomaly explanations seeded by tool family so the banner
+// reads as something CIL actually noticed about THIS action, not a
+// generic "weird thing happened" message.
+const ANOMALY_REASONS_BY_CONNECTOR: Record<ConnectorSlug, readonly string[]> = {
+  github: [
+    'touched 47 files in one commit; agent baseline is 3–7',
+    'force-pushed to a protected branch; never observed for this agent',
+    'opened 11 PRs in 6 minutes; baseline ≤ 2/hour',
+    'created branch off a 4-month-old commit; baseline is HEAD-1d',
+  ],
+  slack: [
+    'posted in 9 channels in 2 minutes; baseline is 1–2/session',
+    'first time this agent has DM-d an external workspace member',
+    'archive_channel from an agent that has never written before',
+  ],
+  linear: [
+    're-prioritized 14 issues in one session; baseline ≤ 3',
+    'closed a P0 without a referenced PR; pattern matches review-skip',
+    'assigned 22 issues to a single user; off baseline by 5×',
+  ],
+  jira: [
+    'transitioned 18 tickets to Done in 4 minutes',
+    'deleted issue without an audit comment; matches review-skip pattern',
+  ],
+  'github-actions': [
+    'dispatched the deploy-prod workflow from an unverified branch',
+    'rotated 3 secrets in one session; baseline is 0',
+    'cancelled a passing CI run during freeze window',
+  ],
+  terraform: [
+    'queued `apply` against production from a non-OWNER agent',
+    'attempted `destroy` on the data-platform workspace; never observed',
+    'removed 4 resources from state in one call',
+  ],
+  postgres: [
+    'DELETE without a WHERE on table `audit_events`',
+    'DROP TABLE on the production replica; baseline never sees this',
+    'SELECT pattern matches PII scrape across `members` + `audit_events`',
+    'ran 23 schema migrations in 90 seconds',
+  ],
+};
+
+/**
+ * Compose CIL anomaly signal for a run. Returns null for normal
+ * actions; an anomaly object when the run should be flagged.
+ *
+ * Rate-tuned so ~6–10% of demo runs are flagged anomalous, with the
+ * flag heavily concentrated on REQUIRE_APPROVAL / DENY + High /
+ * Critical blast radius rows. That's the right shape for the
+ * "CIL caught what static policies would miss" pitch story.
+ */
+function maybeAnomalyFor(
+  tool: string,
+  decision: string,
+  blast: string,
+): { anomaly: true; anomaly_reason: string } | { anomaly: false; anomaly_reason: null } {
+  // Probability ramps with blast + tightened-decision.
+  let p = 0;
+  if (blast === 'Critical') p += 0.4;
+  else if (blast === 'High') p += 0.22;
+  else if (blast === 'Medium') p += 0.06;
+  if (decision === 'DENY') p += 0.15;
+  else if (decision === 'REQUIRE_APPROVAL') p += 0.1;
+  if (rand() > p) return { anomaly: false, anomaly_reason: null };
+
+  const connector = connectorForTool(tool);
+  const reasons = ANOMALY_REASONS_BY_CONNECTOR[connector] ?? ANOMALY_REASONS_BY_CONNECTOR.github;
+  return { anomaly: true, anomaly_reason: pick(reasons) };
+}
+
+// ── Agent delegation chain ───────────────────────────────────────────────
+// Real-world Aegis records who-on-whose-behalf for every action. We mock
+// a set of plausible humans with role mixes; each run gets stably
+// assigned the delegation of its session so the journey reads as one
+// human's work, not "scattered agents acting for random users."
+
+const DEMO_HUMANS: Array<{ user: string; role: SessionAction['delegation'] extends infer T
+  ? T extends { role: infer R } ? R : never : never }> = [
+  { user: 'Ahaan Iqbal',      role: 'OWNER' },
+  { user: 'Mujtaba Basheer',  role: 'ADMIN' },
+  { user: 'Kartik Gupta',     role: 'DEVELOPER' },
+  { user: 'Jenil Parmar',     role: 'DEVELOPER' },
+  { user: 'Priya Subramanian', role: 'REVIEWER' },
+];
+
+const DELEGATION_EXPIRIES = [
+  'in 4h',
+  'in 7h',
+  'in 38m',
+  'Mon 09:00 IST',
+  'Today 18:00 IST',
+  'in 2h 14m',
+];
+
+/** Stable delegation per session — every action in a session is on
+ *  behalf of the same human, in the same role, in the same scope. */
+const DELEGATION_BY_SESSION_ID: Map<
+  string,
+  { user: string; role: string; expires_in: string }
+> = new Map(
+  SESSION_IDS.map((id) => {
+    const human = pick(DEMO_HUMANS);
+    return [
+      id,
+      {
+        user: human.user,
+        role: String(human.role),
+        expires_in: pick(DELEGATION_EXPIRIES),
+      },
+    ];
+  }),
+);
+
 function makeRun(seq: number): SessionAction {
   const ageDays = rand() ** 1.7 * 14; // bias toward recent
   const timestamp = new Date(NOW - ageDays * ONE_DAY).toISOString();
   const agent = pick(AGENTS);
-  const tool = pick(TOOLS);
+  const sessionId = pick(SESSION_IDS);
+  // Session-archetype-aware tool selection so each session reads as
+  // a coherent agent journey across a primary surface + a few
+  // secondary surfaces.
+  const tool = pickToolForSession(sessionId);
   const repo = pick(REPOS);
   const branch = pick(BRANCHES);
   const decision = pickW(DECISIONS);
-  const sessionId = pick(SESSION_IDS);
-  const args =
-    tool === 'create_pull_request'
-      ? { repo, title: 'Open PR for fix', base: 'main', head: branch }
-      : tool === 'create_or_update_file'
-      ? { repo, path: 'src/index.ts', branch, message: 'chore: update' }
-      : tool === 'search_code'
-      ? { q: 'evaluatePolicy', repo }
-      : { repo, branch };
+  const blast = blastRadiusForDecision(decision);
+  const cil = maybeAnomalyFor(tool, decision, blast);
+  const del = DELEGATION_BY_SESSION_ID.get(sessionId);
 
   return {
     id: uuid(),
     session_id: sessionId,
     agent_name: agent,
     tool_name: tool,
-    arguments: args,
-    action_summary: pick(ACTION_PHRASES),
+    arguments: argsForTool(tool, repo, branch),
+    action_summary: phraseForTool(tool),
     result: decision,
     decision,
     target_repo: repo,
@@ -234,7 +1199,20 @@ function makeRun(seq: number): SessionAction {
     // patterns prospects would see in a real workspace. PolicyChip +
     // BlastRadiusChip read these on the Runs / Sessions / Room Logs pages.
     policy: policyForDecision(decision),
-    blast_redius: blastRadiusForDecision(decision),
+    blast_redius: blast,
+    // ── CIL signals ────────────────────────────────────────────────
+    risk_score: riskScoreFor(decision, blast),
+    anomaly: cil.anomaly,
+    anomaly_reason: cil.anomaly_reason,
+    // Agent delegation chain — "Acting as <user> · <role> · <scope>"
+    delegation: del
+      ? {
+          user: del.user,
+          role: del.role,
+          scope: repo,
+          expires_in: del.expires_in,
+        }
+      : null,
   };
 }
 
@@ -260,6 +1238,8 @@ function aggregateSessions(runs: SessionAction[]): Session[] {
         denies: 0,
         rewrites: 0,
         approvals: 0,
+        connectors: [],
+        has_anomaly: false,
       });
     }
     const s = map.get(sid)!;
@@ -269,6 +1249,14 @@ function aggregateSessions(runs: SessionAction[]): Session[] {
     if (r.target_repo && !(s.repos as string[]).includes(r.target_repo)) {
       (s.repos as string[]).push(r.target_repo);
     }
+    // Track unique connectors touched + whether any action tripped
+    // a CIL anomaly. These power the "tool journey" badge and the
+    // session-level anomaly chip on the Sessions table row.
+    const cn = connectorForTool(r.tool_name);
+    const connectors = (s.connectors as string[] | undefined) ?? [];
+    if (!connectors.includes(cn)) connectors.push(cn);
+    s.connectors = connectors;
+    if (r.anomaly) s.has_anomaly = true;
     const d = r.decision?.toUpperCase() || '';
     if (d === 'ALLOW') s.allows = Number(s.allows) + 1;
     else if (d === 'DENY') s.denies = Number(s.denies) + 1;
@@ -294,18 +1282,21 @@ const APPROVALS: MCPApproval[] = Array.from({ length: 11 }, (_, i) => {
   const agent = pick(AGENTS);
   const repo = pick(REPOS);
   const branch = pick(BRANCHES);
-  const tool = pick(TOOLS);
+  // Approval queue is biased toward write/destructive actions (the only
+  // calls that trip REQUIRE_APPROVAL). Pull weighted across GitHub +
+  // Slack so both connectors surface in pending-approval state.
+  const tool = pickToolWeighted();
   return {
     id: `apv_${i}_${uuid()}`,
     user_id: 'preview-user',
     tool_name: tool,
-    arguments: { repo, branch, base: 'main', title: pick(ACTION_PHRASES) },
+    arguments: argsForTool(tool, repo, branch),
     status,
     created_at,
     approved_at,
     result: null,
     context: { user: agent, conversation_id: `conv_${uuid().slice(0, 6)}`, model: agent },
-    action_summary: pick(ACTION_PHRASES),
+    action_summary: phraseForTool(tool),
   };
 }).sort(
   (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -412,28 +1403,21 @@ function makeRoomAction(
   const ageDays = rand() ** 1.6 * 14;
   const timestamp = new Date(NOW - ageDays * ONE_DAY).toISOString();
   const agent = pick(AGENTS);
-  const tool = pick(TOOLS);
+  const tool = pickToolWeighted();
   const branch = pick(BRANCHES);
   const decision = pickW(DECISIONS);
   const sessionId = pick(SESSION_IDS);
   const member = pick(members);
-
-  const args =
-    tool === 'create_pull_request'
-      ? { repo, title: 'Open PR for fix', base: 'main', head: branch }
-      : tool === 'create_or_update_file'
-      ? { repo, path: 'src/index.ts', branch, message: 'chore: update' }
-      : tool === 'search_code'
-      ? { q: 'evaluatePolicy', repo }
-      : { repo, branch };
+  const blast = blastRadiusForDecision(decision);
+  const cil = maybeAnomalyFor(tool, decision, blast);
 
   return {
     id: uuid(),
     session_id: sessionId,
     agent_name: agent,
     tool_name: tool,
-    arguments: args,
-    action_summary: pick(ACTION_PHRASES),
+    arguments: argsForTool(tool, repo, branch),
+    action_summary: phraseForTool(tool),
     result: decision,
     decision,
     target_repo: repo,
@@ -443,7 +1427,20 @@ function makeRoomAction(
     user_id: member.user_id ?? member.username ?? 'preview-user',
     execution_time: Math.floor(80 + rand() * rand() * 6500),
     policy: policyForDecision(decision),
-    blast_redius: blastRadiusForDecision(decision),
+    blast_redius: blast,
+    risk_score: riskScoreFor(decision, blast),
+    anomaly: cil.anomaly,
+    anomaly_reason: cil.anomaly_reason,
+    // Room actions get their delegation from the room member that the
+    // action was attributed to — closer to real-world data (the room
+    // already records the member). The role comes from PREVIEW_ROOM_TOOLS
+    // role mapping via member.role; expiry is a synthetic 4–8h window.
+    delegation: {
+      user: member.username || 'unknown',
+      role: (member.role as string) || 'DEVELOPER',
+      scope: repo,
+      expires_in: pick(DELEGATION_EXPIRIES),
+    },
     room_id: roomId,
     username: member.username,
   };
@@ -474,12 +1471,138 @@ const PREVIEW_ROOM_ACTIONS: Record<string, RoomSessionAction[]> = (() => {
   return out;
 })();
 
-// Default tool policy per role — mostly true, a few false to add nuance.
+// Default tool policy per role. Aligned with the seven-connector
+// catalog so each role tells a sensible governance story:
+//
+//   OWNER     — full surface, including destructive ops on data + infra
+//   DEVELOPER — full code + comms + planning surface; destructive ops
+//               denied (no DROP TABLE, no terraform destroy, no Slack
+//               kick, no archive_channel)
+//   REVIEWER  — read everything, post comments / approvals, no merges
+//               or schema changes
+//   VIEWER    — read-only across every connector
+//
+// Centralized helpers so each role's rule is one declarative line
+// instead of an ever-growing list of `.includes()` checks that drift
+// as we add tools.
+
+/** Tools that DESTROY something across all 7 connectors. Used by the
+ *  DEVELOPER role to exclude high-blast-radius destructive ops. */
+const DESTRUCTIVE_TOOLS = new Set<string>([
+  // GitHub doesn't have a destructive surface (we never expose
+  // delete_repository or delete_branch on agents).
+  // Slack
+  'delete_message',
+  'archive_channel',
+  'kick_user',
+  // Linear
+  'archive_issue',
+  'close_issue',
+  // Jira
+  'delete_issue',
+  'archive_project',
+  // GitHub Actions
+  'delete_secret',
+  'delete_workflow_run',
+  // Terraform — the entire write/state-mutating surface is destructive
+  'apply',
+  'destroy',
+  'state_rm',
+  'state_mv',
+  'import',
+  'taint',
+  'workspace_delete',
+  // Postgres — schema and data destructive ops
+  'drop_table',
+  'truncate_table',
+  'drop_index',
+  'query_delete',
+  'run_migration',
+]);
+
+/** Tools that WRITE without destroying. REVIEWERs lose access to
+ *  these (they can read + comment but can't push fresh changes). */
+const WRITE_TOOLS = new Set<string>([
+  // GitHub writes
+  'push_files',
+  'create_or_update_file',
+  'create_branch',
+  'create_pull_request',
+  'create_issue',
+  // Slack writes
+  'post_message',
+  'post_thread_reply',
+  'upload_file',
+  'invite_user_to_channel',
+  'add_reaction',
+  // Linear writes
+  'create_issue',
+  'update_issue',
+  'add_issue_comment',
+  'create_subtask',
+  'move_issue',
+  'assign_issue',
+  'set_priority',
+  // Jira writes
+  'update_issue',
+  'add_comment',
+  'transition_issue',
+  'assign_issue',
+  'create_subtask',
+  // GitHub Actions writes
+  'dispatch_workflow',
+  'rerun_workflow',
+  'cancel_workflow',
+  'update_secret',
+  // Terraform write surface = destructive (no non-destructive write).
+  // Postgres writes
+  'query_insert',
+  'query_update',
+  'create_table',
+  'alter_table',
+  'create_index',
+]);
+
+/** Read-only tools by naming convention or explicit allowlist.
+ *  VIEWERs see exactly this set across every connector. */
+function isReadOnlyTool(t: string): boolean {
+  return (
+    t.startsWith('get_') ||
+    t.startsWith('list_') ||
+    t.startsWith('search_') ||
+    t.startsWith('describe_') ||
+    t === 'show_indexes' ||
+    t === 'show_constraints' ||
+    t === 'explain_plan' ||
+    t === 'query_select' ||
+    t === 'show' ||
+    t === 'state_list' ||
+    t === 'state_show' ||
+    t === 'output' ||
+    t === 'workspace_list' ||
+    t === 'validate' ||
+    t === 'fmt_check' ||
+    t === 'plan'
+  );
+}
+
 const PREVIEW_ROOM_TOOLS: Record<string, Record<string, boolean>> = {
-  DEVELOPER: Object.fromEntries(TOOLS.map((t) => [t, !t.includes('search_issues')])),
-  REVIEWER:  Object.fromEntries(TOOLS.map((t) => [t, !['push_files', 'create_or_update_file', 'create_branch'].includes(t)])),
-  VIEWER:    Object.fromEntries(TOOLS.map((t) => [t, t.startsWith('get_') || t.startsWith('list_') || t.startsWith('search_')])),
-  OWNER:     Object.fromEntries(TOOLS.map((t) => [t, true])),
+  OWNER: Object.fromEntries(TOOLS.map((t) => [t, true])),
+  DEVELOPER: Object.fromEntries(
+    TOOLS.map((t) => [t, !DESTRUCTIVE_TOOLS.has(t)]),
+  ),
+  REVIEWER: Object.fromEntries(
+    // Reviewers can read everything + leave comments (the few
+    // "comment"-ish writes). No fresh writes or destructive ops.
+    TOOLS.map((t) => [
+      t,
+      isReadOnlyTool(t) ||
+        t === 'add_issue_comment' ||
+        t === 'add_comment' ||
+        t === 'add_reaction',
+    ]),
+  ),
+  VIEWER: Object.fromEntries(TOOLS.map((t) => [t, isReadOnlyTool(t)])),
 };
 
 // Freeze windows

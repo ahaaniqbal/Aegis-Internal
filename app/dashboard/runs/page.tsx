@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, ChevronRight, Search } from 'lucide-react';
+import { Activity, ChevronRight, Search, X } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { DUR, EASE, fadeUp, staggerContainer } from '@/lib/motion';
 import { useUser } from '@/lib/hooks';
@@ -26,6 +27,10 @@ import { RunsSkeleton } from '@/components/ui/PageSkeletons';
 import { BlastRadiusChip } from '@/components/ui/BlastRadiusChip';
 import { Button } from '@/components/ui/Button';
 import { CodeChip } from '@/components/ui/CodeChip';
+import { ConnectorIcon, getConnectorForTool } from '@/components/ui/ConnectorMark';
+import { AnomalyChip, RiskScoreBar } from '@/components/ui/AnomalyChip';
+import { DelegationChain } from '@/components/ui/DelegationChain';
+import { ActionToolbar } from '@/components/ui/ActionToolbar';
 import { Input } from '@/components/ui/Input';
 import { PolicyChip } from '@/components/ui/PolicyChip';
 import { PullRequestLink } from '@/components/ui/PullRequestLink';
@@ -47,6 +52,25 @@ export default function RunsPage() {
   const [search, setSearch] = useState('');
   const [decisionFilter, setDecisionFilter] = useState('all');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  // URL-driven filters. Two deep-link entry points today:
+  //   · /dashboard/runs?cil=anomalies  → dashboard CIL callout drilling
+  //     into the full set of behavioural anomalies.
+  //   · /dashboard/runs?connector=slack → connector detail page
+  //     drilling into every action through that connector.
+  //
+  // Both render a dismissible filter banner above the search row so the
+  // reviewer always knows what subset they're looking at and can clear
+  // back to the unfiltered table in one click.
+  const searchParams = useSearchParams();
+  const cilParam = searchParams?.get('cil') ?? null;
+  const connectorParam = searchParams?.get('connector') ?? null;
+  const buildClearUrl = (key: string): string => {
+    const next = new URLSearchParams(searchParams?.toString() ?? '');
+    next.delete(key);
+    const q = next.toString();
+    return q ? `/dashboard/runs?${q}` : '/dashboard/runs';
+  };
 
   const {
   sessionActions: runs,
@@ -75,7 +99,17 @@ export default function RunsPage() {
         ? run.decision?.toUpperCase().includes('APPROVAL')
         : run.decision?.toUpperCase() === decisionFilter.toUpperCase());
 
-    return matchesSearch && matchesDecision;
+    // CIL anomaly deep-link — show only the flagged actions.
+    const matchesAnomaly = cilParam !== 'anomalies' || run.anomaly === true;
+
+    // Per-connector deep-link — use the same connector-inference
+    // helper that powers the row's ConnectorIcon so the filter and the
+    // rendered icon always agree on which connector a tool belongs to.
+    const matchesConnector =
+      !connectorParam ||
+      getConnectorForTool(run.tool_name) === connectorParam;
+
+    return matchesSearch && matchesDecision && matchesAnomaly && matchesConnector;
   });
 
   // Client-side sort layered on top of the filter. Default is null
@@ -226,6 +260,77 @@ export default function RunsPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Deep-link filter banner — visible only when the page was
+                arrived at via a `?cil=` or `?connector=` URL. Reads as
+                "you're looking at a sliced view" with each filter chip
+                clearable in one click. Tone matches the chip semantic
+                (warning for CIL anomalies, primary for connector
+                drill-downs) so the reviewer's eye lands on the active
+                filter immediately. */}
+            {(cilParam === 'anomalies' || connectorParam) && (
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-[10px] border px-3 py-2"
+                style={{
+                  borderColor:
+                    cilParam === 'anomalies'
+                      ? 'rgba(246, 181, 30, 0.32)'
+                      : 'rgba(250, 115, 25, 0.32)',
+                  backgroundColor:
+                    cilParam === 'anomalies'
+                      ? 'rgba(246, 181, 30, 0.06)'
+                      : 'rgba(250, 115, 25, 0.05)',
+                }}
+              >
+                <span
+                  className="text-[10.5px] font-bold uppercase tracking-[0.08em]"
+                  style={{
+                    color:
+                      cilParam === 'anomalies'
+                        ? 'var(--warning-dark)'
+                        : 'var(--primary-dark)',
+                  }}
+                >
+                  Filtered view
+                </span>
+                {cilParam === 'anomalies' && (
+                  <Link
+                    href={buildClearUrl('cil')}
+                    className="group inline-flex items-center gap-1.5 rounded-[6px] border bg-white px-2 py-[3px] text-[11.5px] font-medium transition-all duration-150 ease-out hover:-translate-y-px hover:bg-[rgba(246,181,30,0.06)] hover:shadow-[0_2px_4px_rgba(246,181,30,0.12)]"
+                    style={{
+                      borderColor: 'rgba(246, 181, 30, 0.45)',
+                      color: 'var(--warning-dark)',
+                    }}
+                  >
+                    CIL-flagged actions only
+                    <X
+                      className="h-3 w-3 opacity-60 transition-all duration-150 group-hover:rotate-90 group-hover:opacity-100"
+                      strokeWidth={2.25}
+                    />
+                  </Link>
+                )}
+                {connectorParam && (
+                  <Link
+                    href={buildClearUrl('connector')}
+                    className="group inline-flex items-center gap-1.5 rounded-[6px] border bg-white px-2 py-[3px] text-[11.5px] font-medium text-[var(--neutral-sub-600)] transition-all duration-150 ease-out hover:-translate-y-px hover:border-[var(--primary-base)]/40 hover:bg-[var(--primary-lighter)]/60 hover:text-[var(--neutral-strong-950)] hover:shadow-[0_2px_4px_rgba(250,115,25,0.10)]"
+                    style={{ borderColor: 'var(--stroke-sub-300)' }}
+                  >
+                    <ConnectorIcon
+                      id={connectorParam as Parameters<typeof ConnectorIcon>[0]['id']}
+                      size={12}
+                    />
+                    Connector: {connectorParam}
+                    <X
+                      className="h-3 w-3 opacity-60 transition-all duration-150 group-hover:rotate-90 group-hover:opacity-100"
+                      strokeWidth={2.25}
+                    />
+                  </Link>
+                )}
+                <span className="ml-auto text-[11px] tabular-nums text-[var(--neutral-sub-600)]">
+                  {filteredRuns.length} of {runs.length}
+                </span>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-[220px] flex-1 sm:min-w-[260px]">
@@ -365,7 +470,18 @@ function RunRow({
           </div>
         </TD>
         <TD>
-          <CodeChip>{run.tool_name}</CodeChip>
+          {/* Tool column — connector mark + tool name. The brand icon
+              makes the multi-tool story visible at a glance: a scan of
+              the table reveals at-a-glance which actions are on GitHub
+              vs Slack vs Linear, without parsing tool names. The icon
+              is title-attribute-labeled for screen readers. */}
+          <span className="inline-flex items-center gap-1.5">
+            {(() => {
+              const connector = getConnectorForTool(run.tool_name);
+              return connector ? <ConnectorIcon id={connector} size={14} /> : null;
+            })()}
+            <CodeChip>{run.tool_name}</CodeChip>
+          </span>
         </TD>
         <TD className="text-[12.5px] font-normal text-[var(--neutral-sub-600)]">
           {run.target_repo}
@@ -376,10 +492,24 @@ function RunRow({
           ) : null}
         </TD>
         <TD className="whitespace-nowrap">
-          <PolicyChip policy={run.policy} />
+          {/* Policy + CIL anomaly stack. When CIL flags this action,
+              the warning chip sits directly under the policy verdict
+              so the reviewer's eye lands on it during a quick scan.
+              Hover the chip for the reason; full reason renders inside
+              the expanded row detail. */}
+          <div className="flex flex-col items-start gap-1">
+            <PolicyChip policy={run.policy} />
+            <AnomalyChip anomaly={run.anomaly} reason={run.anomaly_reason} />
+          </div>
         </TD>
         <TD className="whitespace-nowrap">
-          <BlastRadiusChip value={readBlastRadius(run)} />
+          {/* Blast Radius + CIL risk score. The two visual cues
+              compose: blast radius answers "how bad could this be?",
+              the risk-score bar answers "how likely is this bad?". */}
+          <div className="flex flex-col items-start gap-1.5">
+            <BlastRadiusChip value={readBlastRadius(run)} />
+            <RiskScoreBar score={run.risk_score} />
+          </div>
         </TD>
         <TD className="whitespace-nowrap">
           <div className="flex flex-col items-start gap-1">
@@ -414,6 +544,25 @@ function RunRow({
       >
       {isExpanded && (
         <TRExpanded key="expanded" colSpan={9}>
+          {/* Anomaly callout — full-variant CIL anomaly banner at the
+              top of the expanded panel when the row was flagged. Makes
+              the reason visible without needing to hover the chip. */}
+          {run.anomaly && (
+            <div className="mb-4">
+              <AnomalyChip
+                anomaly
+                reason={run.anomaly_reason}
+                variant="full"
+              />
+            </div>
+          )}
+          {/* Agent delegation chain — identity-evidence row at the top
+              of the panel. "Acting as <user> · <ROLE> in <repo>·expires …" */}
+          {run.delegation && (
+            <div className="mb-4">
+              <DelegationChain delegation={run.delegation} variant="full" />
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--neutral-soft-400)]">
@@ -477,6 +626,14 @@ function RunRow({
               <JsonViewer data={run.arguments} collapsed={false} label="Arguments" />
             </div>
           )}
+          {/* Action toolbar — Layer 5 of the control plane (Pause /
+              Scope-down / Rollback / Escalate). Sits at the bottom of
+              the expanded row, separated by a hairline so it reads as
+              a deliberate intervention zone, not part of the read-only
+              detail above. */}
+          <div className="mt-5 border-t border-[var(--stroke-soft-200)] pt-4">
+            <ActionToolbar targetLabel={run.session_id?.slice(0, 8)} />
+          </div>
         </TRExpanded>
       )}
       </AnimatePresence>

@@ -37,6 +37,47 @@ export interface SessionAction {
    */
   blast_redius?: string | null;
   blast_radius?: string | null;
+  /**
+   * Contextual Intelligence Layer signals.
+   *
+   * `risk_score` — composite 0.0–1.0 score per action. Composed from
+   * blast radius + anomaly distance + policy density. Surfaced in the
+   * Runs table as a small bar / chip; ≥ 0.8 auto-routes to Approval.
+   *
+   * `anomaly` — whether this action falls outside its agent's
+   * behavioral baseline (>2σ on token count, file count, or tool
+   * sequence). Surfaces as an inline banner on the Runs row + on the
+   * Dashboard "anomalies this week" stat.
+   *
+   * `anomaly_reason` — human-readable explanation when `anomaly` is
+   * true. Reads as a sentence ("touched 47 files, baseline 3–7").
+   *
+   * All three are optional so legacy/real-mode data (without CIL
+   * scoring yet) renders cleanly.
+   */
+  risk_score?: number | null;
+  anomaly?: boolean;
+  anomaly_reason?: string | null;
+  /**
+   * Agent delegation chain — the human + role + room scope the agent
+   * was acting on behalf of when this action fired. Surfaces in the
+   * Audit detail + Runs expanded row as identity-infrastructure
+   * evidence: "this agent acted as Ahaan, with DEVELOPER role in the
+   * aegis/dashboard room, with credentials expiring in 4h."
+   *
+   * Each entry is one link in the chain. Order: human → role → room.
+   * Real backend can extend this (workspace, MCP session id, etc.).
+   */
+  delegation?: {
+    /** Human display name acting through the agent. */
+    user: string;
+    /** Role the human held in the active room. */
+    role: 'OWNER' | 'ADMIN' | 'DEVELOPER' | 'REVIEWER' | 'VIEWER' | string;
+    /** Repo / room scope this delegation is scoped to. */
+    scope: string;
+    /** Relative expiry string ("4h", "Mon 9am"). Mocked in demo. */
+    expires_in?: string;
+  } | null;
 }
 
 export interface AggregatedSessionAction {
@@ -94,6 +135,20 @@ export interface Session {
   rewrites: number;
   approvals: number;
   user_id: string;
+  /**
+   * Unique connector slugs this session touched, in first-seen order.
+   * Powers the "tool journey" badges on the Sessions table row —
+   * sessions that span 3+ connectors are the visible proof of the
+   * control-plane claim. Real backend can compute this from the
+   * session's action stream the same way the demo data does.
+   */
+  connectors?: string[];
+  /**
+   * Whether ANY action in this session was flagged anomalous by the
+   * Contextual Intelligence Layer. Used to surface a CIL chip on the
+   * session row.
+   */
+  has_anomaly?: boolean;
 }
 
 export interface User {
