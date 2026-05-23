@@ -1091,6 +1091,36 @@ const ANOMALY_REASONS_BY_CONNECTOR: Record<ConnectorSlug, readonly string[]> = {
     'SELECT pattern matches PII scrape across `members` + `audit_events`',
     'ran 23 schema migrations in 90 seconds',
   ],
+  datadog: [
+    'silenced 47 monitors at 03:14 IST; baseline ≤ 2 silences/session',
+    'force-resolved an active P1 incident without a postmortem link',
+    'deleted the customer-facing SLO dashboard; never observed before',
+    'added a synthetic check from a region the agent has never touched',
+  ],
+  sentry: [
+    'bulk-resolved 200 errors in the payments namespace in 8 seconds',
+    'marked the runaway-loop cluster as `won\'t fix` mid-incident',
+    'first time this agent has deleted a Sentry project',
+    'resolution rate jumped 12× baseline; no matching fix PR landed',
+  ],
+  kubernetes: [
+    '`kubectl delete pod -l app=payments --all` on prod; baseline never sees',
+    'exec into a database pod; agent has never opened an interactive shell',
+    'drained ip-10-0-3-141 outside the scheduled maintenance window',
+    'scaled the runs-ingest deployment to 0 replicas without a rollback plan',
+  ],
+  cloudflare: [
+    'created a public DNS record exposing an internal admin hostname',
+    'purged the entire production cache during peak traffic',
+    'deleted the api.runaegis.co edge worker; baseline never sees this',
+    'updated a KV namespace touching 14k keys in one burst',
+  ],
+  notion: [
+    'shared the SOC 2 evidence page publicly; baseline is internal-only',
+    'archived 18 launch-readiness checklist pages in 90 seconds',
+    'first time this agent has touched the executive workspace',
+    'mass-deleted a database schema with 200+ tracked rows',
+  ],
 };
 
 /**

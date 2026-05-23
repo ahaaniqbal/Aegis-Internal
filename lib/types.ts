@@ -89,6 +89,19 @@ export interface AggregatedSessionAction {
   total_execution_time: number;
   tools_used: string[];
   sessions: Array<SessionAction>;
+  /**
+   * Unique connector slugs this session touched, in first-seen order.
+   * Powers the "tool journey" badges on the Sessions table row. Same
+   * shape as `Session.connectors` — backend can compute either by
+   * walking the session's action stream.
+   */
+  connectors?: string[];
+  /**
+   * Whether ANY action in this aggregated session was flagged
+   * anomalous by the CIL. Used to surface a CIL chip on the session
+   * row.
+   */
+  has_anomaly?: boolean;
 }
 
 /**
