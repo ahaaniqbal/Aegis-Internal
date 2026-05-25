@@ -63,9 +63,11 @@ type SectionId =
   | 'notifications'
   | 'security'
   | 'github'
+  | 'credentials'
   | 'repositories'
   | 'api-keys'
   | 'webhooks'
+  | 'approval-routing'
   | 'policies'
   | 'audit'
   | 'billing'
@@ -88,9 +90,11 @@ const GROUPS: Group[] = [
     label: 'Integrations',
     items: [
       { id: 'github',       label: 'GitHub',       icon: Link2 },
+      { id: 'credentials',  label: 'Credentials',  icon: KeyRound },
       { id: 'repositories', label: 'Repositories', icon: GitBranch },
       { id: 'api-keys',     label: 'API Keys',     icon: KeyRound },
       { id: 'webhooks',     label: 'Webhooks',     icon: Webhook },
+      { id: 'approval-routing', label: 'Approval Routing', icon: GitBranch },
     ],
   },
   {
@@ -113,6 +117,8 @@ const SECTION_DESCRIPTIONS: Record<SectionId, string> = {
   profile:       'How you appear inside Aegis.',
   appearance:    'Theme and visual preferences for the dashboard.',
   notifications: 'Where and when Aegis pings you about agent activity.',
+  credentials:   'Aegis holds tokens on behalf of agents — they never see raw keys.',
+  'approval-routing': 'Route approval requests by environment, blast radius, or time.',
   security:      'Passwords, two-factor auth, and active sessions.',
   github:        'Your GitHub identity and personal access token.',
   repositories:  'Per-repo read/write permissions for your agents.',
@@ -263,11 +269,13 @@ export default function SettingsPage() {
             {active === 'notifications' && <NotificationsSection reduce={!!reduce} onSuccess={handleSectionSuccess} />}
             {active === 'security' && <SecuritySection reduce={!!reduce} />}
             {active === 'github' && <GitHubSection user={user} reduce={!!reduce} />}
+            {active === 'credentials' && <CredentialsSection reduce={!!reduce} />}
             {active === 'repositories' && (
               <RepositoriesSection user={user} reduce={!!reduce} onError={handleSectionError} onSuccess={handleSectionSuccess} />
             )}
             {active === 'api-keys' && <ApiKeysSection reduce={!!reduce} onSuccess={handleSectionSuccess} />}
             {active === 'webhooks' && <WebhooksSection reduce={!!reduce} onSuccess={handleSectionSuccess} />}
+            {active === 'approval-routing' && <ApprovalRoutingSection reduce={!!reduce} />}
             {active === 'policies' && <PoliciesPreview reduce={!!reduce} />}
             {active === 'audit' && <AuditSection reduce={!!reduce} onSuccess={handleSectionSuccess} />}
             {active === 'billing' && <BillingSection reduce={!!reduce} />}
@@ -1125,43 +1133,38 @@ function WebhooksSection({
   reduce: boolean;
   onSuccess: (s: string) => void;
 }) {
-  // Events the backend already emits internally and that the webhook
-  // fan-out will surface once implemented. Grouped semantically so
-  // the panel reads like a documentation preview, not a flat list.
-  const eventGroups: Array<{ category: string; events: string[] }> = [
+  const toast = useToast();
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; latency: number } | null>(null);
+
+  const webhooks = [
     {
-      category: 'Approvals',
-      events: [
-        'approval.requested',
-        'approval.approved',
-        'approval.rejected',
-      ],
+      id: 'wh_pd',
+      name: 'PagerDuty escalation',
+      url: 'https://events.pagerduty.com/v2/enqueue',
+      events: ['action.denied', 'approval.requested', 'agent.quarantined'],
+      lastDelivery: '2h ago · 200 OK',
     },
     {
-      category: 'Actions',
-      events: [
-        'action.allowed',
-        'action.denied',
-        'action.rewritten',
-      ],
-    },
-    {
-      category: 'Policy',
-      events: ['policy.fired', 'policy.changed'],
-    },
-    {
-      category: 'Rooms',
-      events: [
-        'room.member_added',
-        'room.member_removed',
-        'room.role_changed',
-      ],
-    },
-    {
-      category: 'Freeze windows',
-      events: ['freeze_window.started', 'freeze_window.ended'],
+      id: 'wh_audit',
+      name: 'Internal audit sink',
+      url: 'https://audit.internal.company.com/aegis',
+      events: ['*'],
+      lastDelivery: '4m ago · 200 OK',
     },
   ];
+
+  const testWebhook = (id: string, url: string) => {
+    setTestingId(id);
+    setTestResult(null);
+    setTimeout(() => {
+      setTestingId(null);
+      setTestResult({ id, latency: 143 });
+      toast.success(`Test delivered to ${url.replace(/^https?:\/\//, '').slice(0, 32)}…`, {
+        description: '200 OK · 143ms',
+      });
+    }, 800);
+  };
 
   return (
     <motion.div
@@ -1172,37 +1175,78 @@ function WebhooksSection({
       <motion.div variants={fadeUp}>
         <SettingsCard
           title="Webhooks"
-          description="Aegis will POST a signed JSON payload to your endpoint when matching events occur."
+          description="Aegis POSTs a signed JSON payload to your endpoint when matching events occur."
+          action={
+            <Button
+              variant="primary"
+              leadingIcon={<Webhook className="h-3.5 w-3.5" strokeWidth={2.25} />}
+              onClick={() => toast.success('Add-webhook flow coming soon', { description: 'Email ahaan@runaegis.co to wire a webhook today.' })}
+            >
+              Add webhook
+            </Button>
+          }
         >
-          <EmptyState
-            icon={<Webhook className="h-5 w-5" />}
-            title="Webhooks are on the roadmap"
-            description="Wire Aegis into PagerDuty, Slack, Datadog, or your own internal alerting. Each delivery will be signed so you can verify authenticity."
-            compact
-          />
-          <div className="mt-2 border-t border-[var(--stroke-soft-200)] pt-5">
-            <p className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-[var(--neutral-soft-400)]">
-              Planned events
-            </p>
-            <div className="space-y-3">
-              {eventGroups.map((group) => (
-                <div key={group.category}>
-                  <p className="mb-1.5 text-[11.5px] font-medium text-[var(--neutral-sub-600)]">
-                    {group.category}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.events.map((event) => (
-                      <CodeChip key={event}>{event}</CodeChip>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-5 text-[12px] italic text-[var(--neutral-soft-400)]">
-              Reach out via support if this is a blocker for your team — we
-              prioritize the roadmap on customer need.
-            </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--neutral-sub-600)]">
+                  <th className="px-4 py-2.5">Name</th>
+                  <th className="px-3 py-2.5">URL</th>
+                  <th className="px-3 py-2.5">Events</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5">Last delivery</th>
+                  <th className="px-4 py-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--stroke-soft-200)]">
+                {webhooks.map((w) => (
+                  <tr key={w.id} className="hover:bg-[var(--neutral-weak-50)]">
+                    <td className="px-4 py-3 font-semibold text-[var(--neutral-strong-950)]">{w.name}</td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--neutral-sub-600)]">
+                      {w.url.length > 38 ? `${w.url.slice(0, 38)}…` : w.url}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="inline-flex flex-wrap gap-1">
+                        {w.events.map((e) => (
+                          <code key={e} className="rounded-[4px] bg-[var(--neutral-weak-50)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--neutral-sub-600)] ring-1 ring-[var(--stroke-soft-200)]">
+                            {e}
+                          </code>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em]" style={{ backgroundColor: 'rgba(31,193,107,0.10)', color: 'var(--success)' }}>
+                        <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
+                        Active
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--neutral-sub-600)]">{w.lastDelivery}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => testWebhook(w.id, w.url)}
+                          disabled={testingId === w.id}
+                          className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--neutral-strong-950)] hover:bg-[var(--neutral-weak-50)] disabled:opacity-50"
+                        >
+                          {testingId === w.id ? 'Testing…' : 'Test'}
+                        </button>
+                        <button className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--neutral-strong-950)] hover:bg-[var(--neutral-weak-50)]">
+                          Edit
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          {testResult && (
+            <div className="mt-4 rounded-[10px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-3 font-mono text-[11px] text-[var(--neutral-strong-950)]">
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--neutral-soft-400)]">Test response</p>
+              <p>POST · 200 OK · {testResult.latency}ms</p>
+              <p className="mt-1 text-[10.5px] text-[var(--neutral-sub-600)]">{`{ "event": "test", "timestamp": "${new Date().toISOString()}" }`}</p>
+            </div>
+          )}
         </SettingsCard>
       </motion.div>
     </motion.div>
@@ -1343,8 +1387,9 @@ function AuditSection({
   );
 }
 
-// ── Section: Billing & Usage ────────────────────────────────────────────────
+// ── Section: Plan & Usage ───────────────────────────────────────────────────
 function BillingSection({ reduce }: { reduce: boolean }) {
+  const toast = useToast();
   return (
     <motion.div
       variants={staggerContainer(0.05)}
@@ -1354,30 +1399,96 @@ function BillingSection({ reduce }: { reduce: boolean }) {
       <motion.div variants={fadeUp}>
         <SettingsCard
           title="Current plan"
-          description="Manage what Aegis costs your team."
-          action={<Badge tone="primary" uppercase>Free</Badge>}
+          description="Aegis Pro · billed monthly"
+          action={<Badge tone="primary" uppercase>Pro</Badge>}
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <UsageBlock label="Sessions" used={28}    cap={100}    suffix="this month" />
-            <UsageBlock label="Decisions" used={1240} cap={5000}   suffix="this month" />
-            <UsageBlock label="Tokens" used={184310}  cap={500000} suffix="this month" />
-          </div>
-          <div className="mt-5 flex items-center justify-end">
-            <a href="mailto:deals@runaegis.co">
-              <Button variant="primary">Upgrade plan</Button>
-            </a>
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">Price</p>
+              <p className="mt-1 text-[20px] font-bold tabular-nums text-[var(--neutral-strong-950)]">$299<span className="text-[12px] font-normal text-[var(--neutral-sub-600)]">/mo</span></p>
+            </div>
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">Renews</p>
+              <p className="mt-1 text-[14px] font-semibold text-[var(--neutral-strong-950)]">June 5, 2026</p>
+            </div>
+            <div className="flex items-end justify-end sm:items-start">
+              <Button
+                variant="secondary"
+                onClick={() => toast.success('Billing portal opening…', { description: 'Demo workspace — connect Stripe to see real invoices.' })}
+              >
+                Manage billing
+              </Button>
+            </div>
           </div>
         </SettingsCard>
       </motion.div>
 
       <motion.div variants={fadeUp}>
         <SettingsCard
-          title="Invoices"
-          description="Receipts for your records."
+          title="Usage this month"
+          description="Resets May 31, 2026"
         >
-          <p className="rounded-[8px] border border-dashed border-[var(--stroke-sub-300)] p-6 text-center text-[12.5px] text-[var(--neutral-soft-400)]">
-            No invoices yet. You&apos;re on the free plan.
-          </p>
+          <div className="space-y-4">
+            <UsageBlock label="Actions" used={23456} cap={50000} suffix="this month" />
+            <UsageBlock label="Audit retention" used={23} cap={90} suffix="days" />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-[8px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-3 py-2">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">Agents connected</p>
+              <p className="mt-0.5 text-[14px] font-semibold tabular-nums text-[var(--neutral-strong-950)]">8 <span className="font-mono text-[11px] font-normal text-[var(--neutral-sub-600)]">· unlimited (Pro)</span></p>
+            </div>
+            <div className="rounded-[8px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-3 py-2">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">Repos governed</p>
+              <p className="mt-0.5 text-[14px] font-semibold tabular-nums text-[var(--neutral-strong-950)]">6 <span className="font-mono text-[11px] font-normal text-[var(--neutral-sub-600)]">· unlimited (Pro)</span></p>
+            </div>
+          </div>
+        </SettingsCard>
+      </motion.div>
+
+      <motion.div variants={fadeUp}>
+        <SettingsCard
+          title="Plan comparison"
+          description="Upgrade for unlimited retention and enterprise features."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-[12.5px]">
+              <thead>
+                <tr className="border-b border-[var(--stroke-soft-200)] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--neutral-sub-600)]">
+                  <th className="px-3 py-2.5"></th>
+                  <th className="px-3 py-2.5">Starter</th>
+                  <th className="px-3 py-2.5">
+                    Pro
+                    <span className="ml-1 inline-block rounded-full bg-[var(--primary-base)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-white">Current</span>
+                  </th>
+                  <th className="px-3 py-2.5">Enterprise</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--stroke-soft-200)]">
+                {[
+                  ['Actions / month',     '1,000',     '50,000',    'Unlimited'],
+                  ['Agents',              '1',         'Unlimited', 'Unlimited'],
+                  ['Audit retention',     '30 days',   '90 days',   'Unlimited'],
+                  ['SOC 2 export',        '—',         '✓',         '✓'],
+                  ['VPC deployment',      '—',         '—',         '✓'],
+                  ['Compliance bundles',  '—',         '—',         '✓'],
+                  ['SLA',                 '—',         '—',         '99.9%'],
+                  ['Price',               'Free',      '$299/mo',   '$1,500+/mo'],
+                ].map((row) => (
+                  <tr key={row[0]}>
+                    <td className="px-3 py-2.5 font-semibold text-[var(--neutral-strong-950)]">{row[0]}</td>
+                    <td className="px-3 py-2.5 text-[var(--neutral-sub-600)]">{row[1]}</td>
+                    <td className="px-3 py-2.5 font-semibold text-[var(--neutral-strong-950)]">{row[2]}</td>
+                    <td className="px-3 py-2.5 text-[var(--neutral-sub-600)]">{row[3]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-5 flex justify-end">
+            <a href="mailto:deals@runaegis.co">
+              <Button variant="primary">Contact sales</Button>
+            </a>
+          </div>
         </SettingsCard>
       </motion.div>
     </motion.div>
@@ -1418,6 +1529,168 @@ function UsageBlock({
         {Math.round(pct)}% · {suffix}
       </p>
     </div>
+  );
+}
+
+// ── Section: Credentials ────────────────────────────────────────────────────
+function CredentialsSection({ reduce }: { reduce: boolean }) {
+  const toast = useToast();
+  const credentials = [
+    { name: 'GitHub PAT (ahaaniqbal)',         type: 'Personal Access Token',  scope: 'GitHub MCP',     agents: 'All agents',           lastUsed: '2m ago',   rotation: 'Never' },
+    { name: 'Aegis DB Connection String',      type: 'Database credential',    scope: 'PostgreSQL MCP', agents: 'claude-sonnet-4, aider', lastUsed: '4h ago',  rotation: 'Every 90 days (next: Jun 15)' },
+    { name: 'Linear API Key',                  type: 'API Key',                scope: 'Linear MCP',     agents: 'cursor-agent',          lastUsed: 'Yesterday', rotation: 'Never' },
+  ];
+  const usageLog = [
+    { ts: '2m ago',   cred: 'GitHub PAT',  agent: 'claude-sonnet-4', action: 'push_files',   target: 'aegis/dashboard' },
+    { ts: '14m ago',  cred: 'Linear API',  agent: 'cursor-agent',    action: 'list_issues',  target: 'team_eng' },
+    { ts: '1h ago',   cred: 'GitHub PAT',  agent: 'aider',           action: 'create_branch',target: 'aegis/mcp-server' },
+    { ts: '2h ago',   cred: 'Aegis DB',    agent: 'claude-sonnet-4', action: 'query',        target: 'aegis_audit' },
+    { ts: '4h ago',   cred: 'Aegis DB',    agent: 'aider',           action: 'query',        target: 'aegis_audit' },
+  ];
+  return (
+    <motion.div variants={staggerContainer(0.05)} initial={reduce ? false : 'hidden'} animate="show">
+      <motion.div variants={fadeUp}>
+        <SettingsCard
+          title="Credential Isolation"
+          description="Aegis holds credentials on behalf of your agents. Agents never see raw API keys or tokens — Aegis injects them into proxied requests at execution time."
+          action={
+            <Button
+              variant="primary"
+              onClick={() => toast.success('Add-credential flow coming soon', { description: 'Email ahaan@runaegis.co to wire a credential today.' })}
+            >
+              Add credential
+            </Button>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--neutral-sub-600)]">
+                  <th className="px-4 py-2.5">Name</th>
+                  <th className="px-3 py-2.5">Type</th>
+                  <th className="px-3 py-2.5">Scoped to</th>
+                  <th className="px-3 py-2.5">Agents</th>
+                  <th className="px-3 py-2.5">Last used</th>
+                  <th className="px-3 py-2.5">Rotation</th>
+                  <th className="px-4 py-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--stroke-soft-200)]">
+                {credentials.map((c) => (
+                  <tr key={c.name} className="hover:bg-[var(--neutral-weak-50)]">
+                    <td className="px-4 py-3 font-mono text-[12px] font-semibold text-[var(--neutral-strong-950)]">{c.name}</td>
+                    <td className="px-3 py-3 text-[var(--neutral-sub-600)]">{c.type}</td>
+                    <td className="px-3 py-3 font-mono text-[11.5px] text-[var(--neutral-strong-950)]">{c.scope}</td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--neutral-sub-600)]">{c.agents}</td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--neutral-sub-600)]">{c.lastUsed}</td>
+                    <td className="px-3 py-3 text-[11.5px] text-[var(--neutral-sub-600)]">{c.rotation}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1.5">
+                        <button onClick={() => toast.success(`Rotating ${c.name}…`)} className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--neutral-strong-950)] hover:bg-[var(--neutral-weak-50)]">
+                          Rotate
+                        </button>
+                        <button onClick={() => toast.success(`Revoked ${c.name}`)} className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--error)] hover:bg-[var(--neutral-weak-50)]">
+                          Revoke
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SettingsCard>
+      </motion.div>
+
+      <motion.div variants={fadeUp}>
+        <SettingsCard title="Recent usage" description="Last 5 credential injections by Aegis on behalf of your agents.">
+          <ul className="divide-y divide-[var(--stroke-soft-200)]">
+            {usageLog.map((u, i) => (
+              <li key={i} className="grid grid-cols-[80px_1fr_auto] items-center gap-3 px-1 py-2.5">
+                <span className="font-mono text-[11px] text-[var(--neutral-sub-600)]">{u.ts}</span>
+                <span className="font-mono text-[11.5px] text-[var(--neutral-strong-950)]">
+                  <span className="font-semibold">{u.cred}</span>
+                  <span className="mx-1.5 text-[var(--neutral-soft-400)]">·</span>
+                  {u.agent}
+                  <span className="mx-1.5 text-[var(--neutral-soft-400)]">·</span>
+                  {u.action}
+                </span>
+                <span className="font-mono text-[11px] text-[var(--neutral-sub-600)]">{u.target}</span>
+              </li>
+            ))}
+          </ul>
+        </SettingsCard>
+      </motion.div>
+
+      <motion.div variants={fadeUp}>
+        <div className="mb-5 flex items-start gap-3 rounded-[10px] border px-4 py-3" style={{ backgroundColor: 'rgba(246, 181, 30, 0.08)', borderColor: 'rgba(246, 181, 30, 0.32)' }}>
+          <Shield className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--warning-dark)' }} strokeWidth={2.25} />
+          <p className="text-[12.5px] leading-[1.5] text-[var(--neutral-strong-950)]">
+            Credentials stored by Aegis are encrypted at rest using AES-256. They are never exposed in agent context windows or audit log payloads — only a masked reference (e.g. <code className="font-mono">cred_***abc</code>) appears in logs.
+          </p>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Section: Approval Routing ──────────────────────────────────────────────
+function ApprovalRoutingSection({ reduce }: { reduce: boolean }) {
+  const toast = useToast();
+  const rules = [
+    { id: 'r1', name: 'Production-tier actions', condition: 'environment_tier = production',  routeTo: 'ahaaniqbal (Owner)',          requireN: 1, escalation: '—' },
+    { id: 'r2', name: 'Critical blast radius',   condition: 'blast_radius = critical',         routeTo: 'ahaaniqbal + kai',            requireN: 2, escalation: '—' },
+    { id: 'r3', name: 'Outside business hours',  condition: 'within_business_hours = false',   routeTo: 'ahaaniqbal (Owner)',          requireN: 1, escalation: 'Auto-escalate after 15m' },
+  ];
+  return (
+    <motion.div variants={staggerContainer(0.05)} initial={reduce ? false : 'hidden'} animate="show">
+      <motion.div variants={fadeUp}>
+        <SettingsCard
+          title="Approval Routing"
+          description="Configure who gets notified and who must approve based on action risk."
+          action={
+            <Button
+              variant="primary"
+              onClick={() => toast.success('Rule builder coming soon', { description: 'Email ahaan@runaegis.co to add a routing rule today.' })}
+            >
+              Add routing rule
+            </Button>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--neutral-sub-600)]">
+                  <th className="px-4 py-2.5">Rule</th>
+                  <th className="px-3 py-2.5">Condition</th>
+                  <th className="px-3 py-2.5">Route to</th>
+                  <th className="px-3 py-2.5">Require</th>
+                  <th className="px-3 py-2.5">Escalation</th>
+                  <th className="px-4 py-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--stroke-soft-200)]">
+                {rules.map((r) => (
+                  <tr key={r.id} className="hover:bg-[var(--neutral-weak-50)]">
+                    <td className="px-4 py-3 font-semibold text-[var(--neutral-strong-950)]">{r.name}</td>
+                    <td className="px-3 py-3 font-mono text-[11px] text-[var(--neutral-strong-950)]">{r.condition}</td>
+                    <td className="px-3 py-3 text-[var(--neutral-sub-600)]">{r.routeTo}</td>
+                    <td className="px-3 py-3 font-mono tabular-nums text-[var(--neutral-strong-950)]">{r.requireN} approval{r.requireN === 1 ? '' : 's'}</td>
+                    <td className="px-3 py-3 text-[11.5px] text-[var(--neutral-sub-600)]">{r.escalation}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1.5">
+                        <button className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--neutral-strong-950)] hover:bg-[var(--neutral-weak-50)]">Edit</button>
+                        <button onClick={() => toast.success(`Deleted ${r.name}`)} className="rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-1 text-[11px] font-semibold text-[var(--error)] hover:bg-[var(--neutral-weak-50)]">Delete</button>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SettingsCard>
+      </motion.div>
+    </motion.div>
   );
 }
 

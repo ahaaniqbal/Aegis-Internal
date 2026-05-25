@@ -1245,6 +1245,7 @@ function ChevronRightIcon({ className }: { className?: string }) {
  * and decision. Powers the filterable table on the CIL Insights page.
  */
 function DrilldownRow({ run }: { run: SessionAction }) {
+  const [expanded, setExpanded] = useState(false);
   const connector = getConnectorForTool(run.tool_name);
   const decision = (run.decision ?? '').toUpperCase();
   const decisionColor =
@@ -1266,63 +1267,167 @@ function DrilldownRow({ run }: { run: SessionAction }) {
   }
   if (signals.length === 0) signals.push('routine');
 
+  const hasContext =
+    run.session_context_snapshot ||
+    run.repo_context_snapshot ||
+    run.branch_context_snapshot ||
+    run.env_context_snapshot;
+
   return (
-    <tr className="hover:bg-[var(--neutral-weak-50)] transition-colors">
-      <td className="whitespace-nowrap px-4 py-2.5">
-        <RelativeTime
-          timestamp={run.timestamp}
-          className="font-mono text-[11px] text-[var(--neutral-sub-600)]"
-        />
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5">
-        <span className="flex items-center gap-1.5">
-          <AgentMark name={run.agent_name} size="xs" />
-          <span className="font-mono text-[11.5px] font-semibold text-[var(--neutral-strong-950)]">
-            {run.agent_name}
-          </span>
-        </span>
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5">
-        <span className="inline-flex items-center gap-1.5">
-          {connector ? <ConnectorIcon id={connector} size={12} /> : null}
-          <CodeChip>{run.tool_name}</CodeChip>
-        </span>
-      </td>
-      <td className="px-4 py-2.5">
-        {run.semantic_type ? (
-          <SemanticTypeChip
-            semantic_type={run.semantic_type}
-            reason={run.blast_radius_reason}
-          />
-        ) : (
-          <span className="text-[11.5px] text-[var(--neutral-soft-400)]">—</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        <span className="inline-flex flex-wrap items-center gap-1">
-          {signals.slice(0, 3).map((s) => (
-            <code
-              key={s}
-              className="rounded-[4px] bg-[var(--neutral-weak-50)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--neutral-sub-600)] ring-1 ring-[var(--stroke-soft-200)]"
+    <>
+      <tr
+        className={`cursor-pointer transition-colors ${expanded ? 'bg-[var(--neutral-weak-50)]' : 'hover:bg-[var(--neutral-weak-50)]'}`}
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <span className="inline-flex items-center gap-2">
+            <span
+              className={`inline-flex h-4 w-4 items-center justify-center rounded-[3px] text-[10px] font-bold transition-transform ${expanded ? 'rotate-90' : ''}`}
+              style={{ color: 'var(--neutral-sub-600)' }}
+              aria-hidden
             >
-              {s}
-            </code>
-          ))}
-        </span>
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5">
-        <span className="font-mono text-[11px] uppercase tracking-[0.04em] tabular-nums text-[var(--neutral-sub-600)]">
-          {run.blast_radius ?? '—'}
-        </span>
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5">
-        <span
-          className="font-mono text-[11px] font-bold uppercase tracking-[0.06em]"
-          style={{ color: decisionColor }}
-        >
-          {decision || '—'}
-        </span>
-      </td>
-    </tr>
+              ›
+            </span>
+            <RelativeTime
+              timestamp={run.timestamp}
+              className="font-mono text-[11px] text-[var(--neutral-sub-600)]"
+            />
+          </span>
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <span className="flex items-center gap-1.5">
+            <AgentMark name={run.agent_name} size="xs" />
+            <span className="font-mono text-[11.5px] font-semibold text-[var(--neutral-strong-950)]">
+              {run.agent_name}
+            </span>
+          </span>
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <span className="inline-flex items-center gap-1.5">
+            {connector ? <ConnectorIcon id={connector} size={12} /> : null}
+            <CodeChip>{run.tool_name}</CodeChip>
+          </span>
+        </td>
+        <td className="px-4 py-2.5">
+          {run.semantic_type ? (
+            <SemanticTypeChip
+              semantic_type={run.semantic_type}
+              reason={run.blast_radius_reason}
+            />
+          ) : (
+            <span className="text-[11.5px] text-[var(--neutral-soft-400)]">—</span>
+          )}
+        </td>
+        <td className="px-4 py-2.5">
+          <span className="inline-flex flex-wrap items-center gap-1">
+            {signals.slice(0, 3).map((s) => (
+              <code
+                key={s}
+                className="rounded-[4px] bg-[var(--white-0)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--neutral-sub-600)] ring-1 ring-[var(--stroke-soft-200)]"
+              >
+                {s}
+              </code>
+            ))}
+          </span>
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <span className="font-mono text-[11px] uppercase tracking-[0.04em] tabular-nums text-[var(--neutral-sub-600)]">
+            {run.blast_radius ?? '—'}
+          </span>
+        </td>
+        <td className="whitespace-nowrap px-4 py-2.5">
+          <span
+            className="font-mono text-[11px] font-bold uppercase tracking-[0.06em]"
+            style={{ color: decisionColor }}
+          >
+            {decision || '—'}
+          </span>
+        </td>
+      </tr>
+      {expanded && hasContext && (
+        <tr className="bg-[var(--neutral-weak-50)]">
+          <td colSpan={7} className="px-4 py-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <ContextPanel
+                title="SessionContext"
+                rows={[
+                  ['session_id', run.session_id?.substring(0, 12) ?? '—'],
+                  ['push_count', String(run.session_context_snapshot?.push_count ?? 0)],
+                  ['denial_count', String(run.session_context_snapshot?.denial_count ?? 0)],
+                  ['ci_failure_streak', String(run.session_context_snapshot?.ci_failure_streak ?? 0)],
+                  ['sequence_order', String(run.session_context_snapshot?.sequence_order ?? 0)],
+                  ['workflow_stage', run.session_context_snapshot?.workflow_stage ?? 'coding'],
+                ]}
+              />
+              <ContextPanel
+                title="RepoContext"
+                rows={[
+                  ['target_branch', run.repo_context_snapshot?.target_branch ?? run.target_branch ?? '—'],
+                  ['is_protected_branch', String(run.repo_context_snapshot?.is_protected_branch ?? false)],
+                  ['ci_passing', String(run.repo_context_snapshot?.ci_passing ?? true)],
+                  ['freeze_window_active', String(run.repo_context_snapshot?.freeze_window_active ?? false)],
+                ]}
+              />
+              <ContextPanel
+                title="BranchContext"
+                rows={[
+                  ['is_aegis_managed', String(run.branch_context_snapshot?.is_aegis_managed ?? false)],
+                  ['session_owner_match', String(run.branch_context_snapshot?.session_owner_match ?? true)],
+                  ['has_open_pr', String(run.branch_context_snapshot?.has_open_pr ?? false)],
+                  ['branch_age_seconds', String(run.branch_context_snapshot?.branch_age_seconds ?? 0)],
+                ]}
+              />
+              <ContextPanel
+                title="EnvContext"
+                rows={[
+                  ['environment_tier', run.env_context_snapshot?.environment_tier ?? 'staging'],
+                  ['active_incident', String(run.env_context_snapshot?.active_incident ?? false)],
+                  ['within_business_hours', String(run.env_context_snapshot?.within_business_hours ?? true)],
+                ]}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--stroke-soft-200)] pt-3 font-mono text-[11px]">
+              <span>
+                <span className="text-[var(--neutral-soft-400)]">→ semantic_type</span>{' '}
+                {run.semantic_type ? (
+                  <SemanticTypeChip semantic_type={run.semantic_type} reason={run.blast_radius_reason} />
+                ) : <span className="text-[var(--neutral-soft-400)]">—</span>}
+              </span>
+              <span>
+                <span className="text-[var(--neutral-soft-400)]">→ blast_radius</span>{' '}
+                <span className="font-bold uppercase tracking-[0.04em] text-[var(--neutral-strong-950)]">
+                  {run.blast_radius ?? '—'}
+                </span>
+              </span>
+              <span>
+                <span className="text-[var(--neutral-soft-400)]">→ decision</span>{' '}
+                <span className="font-bold uppercase tracking-[0.06em]" style={{ color: decisionColor }}>
+                  {decision || '—'}
+                </span>
+              </span>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ContextPanel({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+  return (
+    <div className="rounded-[8px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-3 py-2.5">
+      <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">
+        {title}
+      </p>
+      <dl className="space-y-1">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-start justify-between gap-2 font-mono text-[10.5px]">
+            <dt className="text-[var(--neutral-sub-600)]">{k}</dt>
+            <dd className="text-right font-semibold text-[var(--neutral-strong-950)] break-all">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
