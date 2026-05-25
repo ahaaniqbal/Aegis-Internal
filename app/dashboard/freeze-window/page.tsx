@@ -1048,6 +1048,14 @@ function FreezeWindowRow({
               Active now
             </Badge>
           )}
+          {/* Scope chip — demo workspace shows every window as "All
+              repositories" scope. The form modal includes a "Specific
+              repository" option (coming-soon) for the customer who
+              needs per-repo freeze windows. */}
+          <span className="inline-flex items-center gap-1 rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] px-2 py-0.5 font-mono text-[10.5px] text-[var(--neutral-sub-600)]">
+            <span className="text-[var(--neutral-soft-400)]">scope</span>
+            <span className="font-semibold text-[var(--neutral-strong-950)]">all repos</span>
+          </span>
         </div>
         <p className="mt-0.5 text-[11.5px] text-[var(--neutral-soft-400)]">
           {w.timezone}

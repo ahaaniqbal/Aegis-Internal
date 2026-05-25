@@ -624,6 +624,19 @@ function SessionRow({
                     result: action.result,
                     arguments: action.arguments,
                   });
+                  // Color the timeline dot by the action's decision so
+                  // a reviewer can scan a session and see the shape of
+                  // its decisions at a glance: green=ALLOW, amber=REWRITE,
+                  // amber-dark=APPROVAL, red=DENY.
+                  const decisionUpper = (action.decision ?? '').toUpperCase();
+                  const dotColor =
+                    decisionUpper === 'DENY' ? 'var(--error)'
+                    : decisionUpper === 'REWRITE' ? 'var(--primary-base)'
+                    : decisionUpper === 'ALLOW' ? 'var(--success)'
+                    : decisionUpper.includes('APPROVAL') ? 'var(--warning-dark)'
+                    : 'var(--neutral-soft-400)';
+                  const isDeny = decisionUpper === 'DENY';
+                  const isRewrite = decisionUpper === 'REWRITE';
                   return (
                   <li
                     key={action.id}
@@ -652,7 +665,8 @@ function SessionRow({
                     <div className="relative flex w-[14px] shrink-0 justify-center pt-[8px]">
                       <span
                         aria-hidden
-                        className="relative inline-block h-[9px] w-[9px] rounded-full bg-[var(--neutral-soft-400)]"
+                        className="relative inline-block h-[9px] w-[9px] rounded-full ring-2 ring-[var(--white-0)]"
+                        style={{ backgroundColor: dotColor }}
                       />
                     </div>
 
@@ -684,12 +698,69 @@ function SessionRow({
                             <p className="mt-1.5 text-[13px] leading-[1.45] text-[var(--neutral-strong-950)]">
                               {action.action_summary}
                             </p>
+                            {/* semantic_type chip — surface the canonical
+                                classification inline so each action row
+                                tells the full CIL story (what the
+                                classifier emitted, not just the decision). */}
+                            {action.semantic_type && (
+                              <div className="mt-1.5">
+                                <SemanticTypeChip
+                                  semantic_type={action.semantic_type}
+                                  reason={action.blast_radius_reason}
+                                />
+                              </div>
+                            )}
+                            {/* DENY callout — red-bordered note with the
+                                classifier's reasoning. Surfaces WHY the
+                                action was blocked so the reviewer doesn't
+                                have to drill into the run detail. */}
+                            {isDeny && action.blast_radius_reason && (
+                              <div
+                                className="mt-2 flex items-start gap-2 rounded-[6px] border px-2.5 py-1.5"
+                                style={{
+                                  backgroundColor: 'rgba(251, 55, 72, 0.06)',
+                                  borderColor: 'rgba(251, 55, 72, 0.28)',
+                                }}
+                              >
+                                <span
+                                  aria-hidden
+                                  className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: 'var(--error)' }}
+                                />
+                                <span className="text-[11.5px] leading-[1.4] text-[var(--error-dark)]">
+                                  <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--error)' }}>
+                                    denied
+                                  </span>
+                                  <span className="ml-1.5">{action.blast_radius_reason}</span>
+                                </span>
+                              </div>
+                            )}
+                            {/* REWRITE callout — inline PR badge so the
+                                "where the rewritten work went" answer is
+                                readable without scanning the right rail. */}
+                            {isRewrite && actionPrUrl && (
+                              <div
+                                className="mt-2 inline-flex items-center gap-2 rounded-[6px] border px-2.5 py-1.5"
+                                style={{
+                                  backgroundColor: 'rgba(250, 115, 25, 0.06)',
+                                  borderColor: 'rgba(250, 115, 25, 0.28)',
+                                }}
+                              >
+                                <span className="font-mono text-[9.5px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--primary-base)' }}>
+                                  rewrite
+                                </span>
+                                <span className="text-[11.5px] text-[var(--neutral-strong-950)]">
+                                  rewrote onto <code className="font-mono">aegis_workstation</code>, opened PR
+                                </span>
+                                <PullRequestLink url={actionPrUrl} variant="chip" />
+                              </div>
+                            )}
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1.5">
                             <DecisionBadge decision={action.decision} />
                             <PolicyChip policy={action.policy} />
                             <BlastRadiusChip value={readBlastRadius(action)} />
-                            {actionPrUrl && (
+                            {actionPrUrl && !isRewrite && (
                               <PullRequestLink url={actionPrUrl} variant="chip" />
                             )}
                           </div>
