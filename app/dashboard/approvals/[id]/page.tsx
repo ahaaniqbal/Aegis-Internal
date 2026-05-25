@@ -365,7 +365,7 @@ export default function ApprovalDetailPage({
                 <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-3 sm:px-5">
                   <div>
                     <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
-                      Layer 2 · context evidence
+                      Context evidence
                     </p>
                     <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
                       Four signals the classifier evaluated

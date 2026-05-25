@@ -17,7 +17,9 @@
  * goal is to show prospects the SHAPE of the report they'd get.
  */
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   Activity,
@@ -44,20 +46,22 @@ import type { SemanticType } from '@/lib/types';
 const MOCK_REPORT = {
   windowStart: '2026-05-18T09:00:00.000Z',
   windowEnd: '2026-05-25T09:00:00.000Z',
-  actionsObserved: 2_847,
+  actionsObserved: 247,
   agentsActive: 11,
   toolsExercised: 23,
-  wouldHaveDenied: 14,
-  wouldHaveRequiredApproval: 47,
+  wouldHaveDenied: 17,
+  wouldHaveRequiredApproval: 45,
   rewriteOpportunities: 8,
   semanticTypeBreakdown: [
+    // Sums must match the metric cards above. 8 REWRITE + 17 DENY + 45 APPROVAL = 70.
+    // Routine ALLOW makes up the remaining 177 actions (247 total - 70 policy hits).
     { type: 'protected_branch_write' as SemanticType, count: 8, severity: 'REWRITE' as const },
     { type: 'sensitive_path_change' as SemanticType, count: 18, severity: 'REQUIRE_APPROVAL' as const },
-    { type: 'large_blast_radius_change' as SemanticType, count: 24, severity: 'REQUIRE_APPROVAL' as const },
-    { type: 'freeze_window_violation' as SemanticType, count: 6, severity: 'DENY' as const },
-    { type: 'credential_exposure' as SemanticType, count: 3, severity: 'DENY' as const },
-    { type: 'autonomous_merge_attempt' as SemanticType, count: 5, severity: 'DENY' as const },
+    { type: 'large_blast_radius_change' as SemanticType, count: 22, severity: 'REQUIRE_APPROVAL' as const },
     { type: 'sequence_anomaly' as SemanticType, count: 5, severity: 'REQUIRE_APPROVAL' as const },
+    { type: 'freeze_window_violation' as SemanticType, count: 7, severity: 'DENY' as const },
+    { type: 'credential_exposure' as SemanticType, count: 4, severity: 'DENY' as const },
+    { type: 'autonomous_merge_attempt' as SemanticType, count: 6, severity: 'DENY' as const },
   ],
   riskiestAgents: [
     { name: 'claude-sonnet-4', actions: 412, wouldHaveDenied: 5, wouldHaveRequired: 18 },
@@ -78,6 +82,8 @@ type SimulationStage = 'observe' | 'warn' | 'enforce';
 export default function SimulationModePage() {
   const reduce = useReducedMotion();
   const [stage, setStage] = useState<SimulationStage>('observe');
+  const [showStartDialog, setShowStartDialog] = useState(false);
+  const router = useRouter();
 
   return (
     <>
@@ -108,7 +114,7 @@ export default function SimulationModePage() {
             variants={fadeUp}
             className="mt-2 max-w-[680px] text-[13.5px] leading-[1.55] text-[var(--neutral-sub-600)]"
           >
-            Install Aegis in observe-only mode in 15 minutes. No actions are blocked. Aegis watches every agent tool call, classifies it through the Layer 2 semantic engine, and logs everything. After 7 days you get a Risk Report showing what would have been denied, what would have required approval, and which policies to enable first. Zero migration. Zero risk.
+            Install Aegis in observe-only mode in 15 minutes. No actions are blocked. Aegis watches every agent tool call, classifies it through the Contextual Intelligence Layer, and logs everything. After 7 days you get a Risk Report showing what would have been denied, what would have required approval, and which policies to enable first. Zero migration. Zero risk.
           </motion.p>
         </motion.header>
 
@@ -222,7 +228,11 @@ export default function SimulationModePage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="primary" leadingIcon={<Play className="h-3.5 w-3.5" strokeWidth={2.25} />}>
+              <Button
+                variant="primary"
+                leadingIcon={<Play className="h-3.5 w-3.5" strokeWidth={2.25} />}
+                onClick={() => setShowStartDialog(true)}
+              >
                 Start Shadow Mode
               </Button>
               <Button variant="secondary" leadingIcon={<Download className="h-3.5 w-3.5" strokeWidth={2} />}>
@@ -356,6 +366,38 @@ export default function SimulationModePage() {
           Simulation Mode is the GTM entry point on the canonical Aegis roadmap. Backend wiring lands in the next sprint. The shape of the report above is what customers will see.
         </p>
       </div>
+
+      {/* Start Shadow Mode dialog. Explains the three steps before sending
+          the user into the Connect flow. Keeps the dead-button feel out
+          and gives prospects a clear next step. */}
+      <ConfirmDialog
+        open={showStartDialog}
+        onOpenChange={setShowStartDialog}
+        title="Three steps to Shadow Mode"
+        description={
+          <div className="space-y-3 text-[13px] leading-[1.55] text-[var(--neutral-sub-600)]">
+            <div className="flex gap-3">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--primary-base)] text-[10px] font-bold text-white">1</span>
+              <span>Open a Room and copy its MCP endpoint URL from the Connect tab.</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--primary-base)] text-[10px] font-bold text-white">2</span>
+              <span>Paste the URL into your agent's MCP config (Cursor, Claude Code, Codex, anywhere). Aegis observes silently — nothing gets blocked.</span>
+            </div>
+            <div className="flex gap-3">
+              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--primary-base)] text-[10px] font-bold text-white">3</span>
+              <span>Come back in seven days. Your Risk Report shows what would have been denied, what would have required approval, and which policies to enable first.</span>
+            </div>
+          </div>
+        }
+        confirmLabel="Go to Connect"
+        cancelLabel="Not now"
+        variant="primary"
+        onConfirm={() => {
+          setShowStartDialog(false);
+          router.push('/dashboard/rooms');
+        }}
+      />
     </>
   );
 }
@@ -441,7 +483,7 @@ function ReportMetric({
         {label}
       </p>
       <p
-        className="mt-1 text-[22px] font-semibold leading-none tabular-nums"
+        className="mt-1.5 text-[28px] font-bold leading-none tabular-nums"
         style={{ color: color ?? 'var(--neutral-strong-950)' }}
       >
         {value}

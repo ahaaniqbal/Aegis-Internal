@@ -25,7 +25,7 @@
  * everything else." Easy story for the engineering hand-off.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
 import {
@@ -60,7 +60,7 @@ import { SemanticTypeChip, SEMANTIC_TYPE_CONFIG } from '@/components/ui/Semantic
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useDashboardData } from '@/lib/dashboardDataContext';
 import { DUR, EASE, fadeUp, fadeUpSm, staggerContainer } from '@/lib/motion';
-import type { SemanticType } from '@/lib/types';
+import type { SemanticType, SessionAction } from '@/lib/types';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const TREND_DAYS = 14;
@@ -71,9 +71,46 @@ const TREND_DAYS = 14;
 const TRUST_FLOOR = 0.5;
 const MATURE_BASELINE_RUNS = 20;
 
+type TimeRange = '24h' | '7d' | '30d';
+
+const TIME_RANGE_MS: Record<TimeRange, number> = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d':  7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+/** Canonical 10 in display order (most-restrictive decision last, ALLOW types first). */
+const SEMANTIC_TYPE_FILTER_ORDER: SemanticType[] = [
+  'working_commit',
+  'test_only_change',
+  'ephemeral_force_push',
+  'protected_branch_write',
+  'large_blast_radius_change',
+  'sensitive_path_change',
+  'sequence_anomaly',
+  'freeze_window_violation',
+  'credential_exposure',
+  'autonomous_merge_attempt',
+];
+
 export default function InsightsPage() {
   const reduce = useReducedMotion();
   const { sessionActions: runs, lastUpdated, refreshRuns } = useDashboardData();
+
+  // Drill-down state — filter table by semantic_type (single-select)
+  // and time range (24h / 7d / 30d).
+  const [activeType, setActiveType] = useState<SemanticType | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('7d');
+
+  const drilldownRuns = useMemo(() => {
+    const cutoff = Date.now() - TIME_RANGE_MS[timeRange];
+    return runs
+      .filter((r) => new Date(r.timestamp).getTime() >= cutoff)
+      .filter((r) => (activeType ? r.semantic_type === activeType : true))
+      .filter((r) => !!r.semantic_type)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 50);
+  }, [runs, activeType, timeRange]);
 
   // ── Semantic_type distribution (Layer 2 canonical view) ───────
   // Counts every action's `semantic_type` for this-week's runs and
@@ -294,7 +331,7 @@ export default function InsightsPage() {
     <>
       <Topbar
         title="CIL Insights"
-        subtitle="Contextual Intelligence Layer · Layer 2"
+        subtitle="Deterministic semantic classifier"
         lastUpdated={lastUpdated}
         onRefresh={refreshRuns}
         showDateRange
@@ -311,7 +348,7 @@ export default function InsightsPage() {
             variants={fadeUp}
             className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]"
           >
-            Layer 2 · Contextual Intelligence Layer
+            Contextual Intelligence Layer
           </motion.p>
           <motion.h1
             variants={fadeUp}
@@ -340,7 +377,7 @@ export default function InsightsPage() {
         >
           <div className="border-b border-[var(--stroke-soft-200)] px-4 py-3 sm:px-5">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
-              Layer 2 · canonical example
+              Canonical example
             </p>
             <h2 className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
               <code className="font-mono text-[13px]">git push --force</code>
@@ -450,7 +487,7 @@ export default function InsightsPage() {
           >
             <div className="border-b border-[var(--stroke-soft-200)] px-5 py-3">
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
-                Layer 2 · semantic_type distribution
+                semantic_type distribution
               </p>
               <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
                 {semanticTypeDistribution.reduce((s, x) => s + x.count, 0)} classifications this week
@@ -472,6 +509,124 @@ export default function InsightsPage() {
           </motion.section>
         )}
 
+        {/* ─── Drill-down: filter + recent classifications table ───── */}
+        <motion.section
+          className="mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.22 }}
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--stroke-soft-200)] px-4 py-3 sm:px-5">
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
+                Recent classifications
+              </p>
+              <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                {drilldownRuns.length === 0
+                  ? activeType ? `No ${activeType} in this window` : 'No classifications in this window'
+                  : `${drilldownRuns.length} ${drilldownRuns.length === 1 ? 'classification' : 'classifications'}${activeType ? ` of type ${activeType}` : ''}`}
+              </h2>
+            </div>
+            {/* Time-range pill control */}
+            <div
+              role="tablist"
+              className="inline-flex items-center gap-0.5 rounded-[8px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] p-0.5"
+            >
+              {(['24h', '7d', '30d'] as TimeRange[]).map((r) => (
+                <button
+                  key={r}
+                  role="tab"
+                  aria-selected={timeRange === r}
+                  onClick={() => setTimeRange(r)}
+                  className={[
+                    'h-6 rounded-[6px] px-2.5 text-[11px] font-semibold tracking-[-0.005em] transition-colors',
+                    timeRange === r
+                      ? 'bg-[var(--white-0)] text-[var(--neutral-strong-950)] shadow-[0_1px_2px_rgba(23,23,23,0.06)]'
+                      : 'text-[var(--neutral-sub-600)] hover:text-[var(--neutral-strong-950)]',
+                  ].join(' ')}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Semantic type filter chip row */}
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--stroke-soft-200)] px-4 py-3 sm:px-5">
+            <button
+              onClick={() => setActiveType(null)}
+              className={[
+                'inline-flex h-[22px] items-center rounded-[6px] border px-2 text-[10.5px] font-semibold tracking-[-0.005em] transition-colors',
+                activeType === null
+                  ? 'border-[var(--neutral-strong-950)] bg-[var(--neutral-strong-950)] text-white'
+                  : 'border-[var(--stroke-soft-200)] bg-[var(--white-0)] text-[var(--neutral-sub-600)] hover:border-[var(--stroke-sub-300)]',
+              ].join(' ')}
+            >
+              All
+            </button>
+            {SEMANTIC_TYPE_FILTER_ORDER.map((t) => {
+              const isActive = activeType === t;
+              const cfg = SEMANTIC_TYPE_CONFIG[t];
+              const color =
+                cfg?.tone === 'primary' ? 'var(--primary-base)'
+                : cfg?.tone === 'error'  ? 'var(--error)'
+                : cfg?.tone === 'warning'? 'var(--warning-dark)'
+                : cfg?.tone === 'success'? 'var(--success)'
+                : 'var(--neutral-sub-600)';
+              return (
+                <button
+                  key={t}
+                  onClick={() => setActiveType(isActive ? null : t)}
+                  className={[
+                    'inline-flex h-[22px] items-center gap-1 rounded-[6px] border px-2 font-mono text-[10px] font-medium tracking-[-0.005em] transition-colors',
+                    isActive
+                      ? 'border-transparent text-white'
+                      : 'border-[var(--stroke-soft-200)] bg-[var(--white-0)] text-[var(--neutral-sub-600)] hover:border-[var(--stroke-sub-300)]',
+                  ].join(' ')}
+                  style={isActive ? { backgroundColor: color } : undefined}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.85)' : color }}
+                  />
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Drill-down table */}
+          {drilldownRuns.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[12.5px] text-[var(--neutral-sub-600)]">
+              {activeType
+                ? <>No <code className="font-mono text-[12px]">{activeType}</code> classifications in the last {timeRange}. Try widening the window or removing the filter.</>
+                : <>No classifications in the last {timeRange}.</>}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-[12px]">
+                <thead>
+                  <tr className="border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[var(--neutral-sub-600)]">
+                    <th scope="col" className="px-4 py-2.5">When</th>
+                    <th scope="col" className="px-4 py-2.5">Agent</th>
+                    <th scope="col" className="px-4 py-2.5">Tool</th>
+                    <th scope="col" className="px-4 py-2.5">semantic_type</th>
+                    <th scope="col" className="px-4 py-2.5">Context signals</th>
+                    <th scope="col" className="px-4 py-2.5">Blast</th>
+                    <th scope="col" className="px-4 py-2.5">Decision</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--stroke-soft-200)]">
+                  {drilldownRuns.map((r) => (
+                    <DrilldownRow key={r.id} run={r} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.section>
+
         {/* ─── Behavioral amplifier section divider ───────────────── */}
         <motion.div
           className="mb-4 border-t border-[var(--stroke-soft-200)] pt-6"
@@ -480,7 +635,7 @@ export default function InsightsPage() {
           transition={{ duration: DUR.default, ease: EASE.out, delay: 0.24 }}
         >
           <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]">
-            Layer 2 amplifier · Behavioral baselines · Roadmap
+            Behavioral baselines · Roadmap
           </p>
           <h2 className="text-[18px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--neutral-strong-950)]">
             What your agent baselines tell us
@@ -581,7 +736,7 @@ export default function InsightsPage() {
             <ChartContainer
               config={chartConfig}
               // Fixed height matching the shadcn ChartContainer pattern
-              // used on Token Spenditure (h-[320px] there for the big
+              // used on Token Expenditure (h-[320px] there for the big
               // hero charts). Insights trend is a secondary surface —
               // 220px keeps the whole page in one viewport on a
               // standard 13" laptop, which the previous 16:5 aspect
@@ -1081,5 +1236,93 @@ function ChevronRightIcon({ className }: { className?: string }) {
     >
       <polyline points="9 18 15 12 9 6" />
     </svg>
+  );
+}
+
+/**
+ * Drill-down table row. Renders a single classified action with its
+ * agent, tool, semantic_type chip, context signals strip, blast radius,
+ * and decision. Powers the filterable table on the CIL Insights page.
+ */
+function DrilldownRow({ run }: { run: SessionAction }) {
+  const connector = getConnectorForTool(run.tool_name);
+  const decision = (run.decision ?? '').toUpperCase();
+  const decisionColor =
+    decision === 'DENY' ? 'var(--error)'
+    : decision === 'REWRITE' ? 'var(--primary-base)'
+    : decision === 'ALLOW' ? 'var(--success)'
+    : 'var(--warning-dark)';
+
+  // Build a short "context signals" summary — surface 2-3 fields from
+  // the four context snapshots that motivated this classification.
+  const signals: string[] = [];
+  if (run.repo_context_snapshot?.freeze_window_active) signals.push('freeze_active');
+  if (run.repo_context_snapshot?.is_protected_branch) signals.push('protected_branch');
+  if (run.branch_context_snapshot?.is_aegis_managed) signals.push('aegis_managed');
+  if (run.env_context_snapshot?.environment_tier === 'production') signals.push('prod_tier');
+  if (run.env_context_snapshot?.active_incident) signals.push('active_incident');
+  if (run.session_context_snapshot?.ci_failure_streak && run.session_context_snapshot.ci_failure_streak >= 3) {
+    signals.push(`ci_failures=${run.session_context_snapshot.ci_failure_streak}`);
+  }
+  if (signals.length === 0) signals.push('routine');
+
+  return (
+    <tr className="hover:bg-[var(--neutral-weak-50)] transition-colors">
+      <td className="whitespace-nowrap px-4 py-2.5">
+        <RelativeTime
+          timestamp={run.timestamp}
+          className="font-mono text-[11px] text-[var(--neutral-sub-600)]"
+        />
+      </td>
+      <td className="whitespace-nowrap px-4 py-2.5">
+        <span className="flex items-center gap-1.5">
+          <AgentMark name={run.agent_name} size="xs" />
+          <span className="font-mono text-[11.5px] font-semibold text-[var(--neutral-strong-950)]">
+            {run.agent_name}
+          </span>
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-4 py-2.5">
+        <span className="inline-flex items-center gap-1.5">
+          {connector ? <ConnectorIcon id={connector} size={12} /> : null}
+          <CodeChip>{run.tool_name}</CodeChip>
+        </span>
+      </td>
+      <td className="px-4 py-2.5">
+        {run.semantic_type ? (
+          <SemanticTypeChip
+            semantic_type={run.semantic_type}
+            reason={run.blast_radius_reason}
+          />
+        ) : (
+          <span className="text-[11.5px] text-[var(--neutral-soft-400)]">—</span>
+        )}
+      </td>
+      <td className="px-4 py-2.5">
+        <span className="inline-flex flex-wrap items-center gap-1">
+          {signals.slice(0, 3).map((s) => (
+            <code
+              key={s}
+              className="rounded-[4px] bg-[var(--neutral-weak-50)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--neutral-sub-600)] ring-1 ring-[var(--stroke-soft-200)]"
+            >
+              {s}
+            </code>
+          ))}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-4 py-2.5">
+        <span className="font-mono text-[11px] uppercase tracking-[0.04em] tabular-nums text-[var(--neutral-sub-600)]">
+          {run.blast_radius ?? '—'}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-4 py-2.5">
+        <span
+          className="font-mono text-[11px] font-bold uppercase tracking-[0.06em]"
+          style={{ color: decisionColor }}
+        >
+          {decision || '—'}
+        </span>
+      </td>
+    </tr>
   );
 }

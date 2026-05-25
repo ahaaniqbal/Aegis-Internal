@@ -1435,6 +1435,35 @@ function classifyForDemo(
   const looksLikeMerge = tool === 'merge_pull_request';
   const looksDestructive = /drop\s+table|truncate|delete\s+from/i.test(sql);
 
+  // Tool-aware early classifications — prevents read actions from
+  // falling into write-only fallback paths (e.g. list_secrets being
+  // tagged as autonomous_merge_attempt or list_branches being tagged as
+  // freeze_window_violation). Both were real demo bugs.
+  const looksLikeSecretEnumeration = /^(list_secrets|get_secret|get_secrets|list_credentials)$/i.test(tool);
+  const isReadOnlyTool = /^(list_|get_|search_)/.test(tool) && !looksLikeSecretEnumeration;
+
+  // Agent enumerating the secrets store is suspicious — DENY before
+  // credentials are exposed. Great governance demo moment.
+  if (looksLikeSecretEnumeration) {
+    return {
+      semantic_type: 'credential_exposure',
+      blast_radius: 'critical',
+      blast_radius_reason: 'Agent attempted to enumerate the secrets store. Hard pre-policy DENY before credentials are exposed.',
+      confidence: 0.95,
+    };
+  }
+
+  // Other read-only tools always classify as routine ALLOW. Reads
+  // don't mutate state so they never fire a write-tier policy.
+  if (isReadOnlyTool) {
+    return {
+      semantic_type: 'working_commit',
+      blast_radius: 'minimal',
+      blast_radius_reason: 'Read action — no state mutation, no policy concern.',
+      confidence: 1.0,
+    };
+  }
+
   // Priority order matches the backend classifier:
   // credential_exposure > sensitive_path_change > freeze_window_violation
   // > ephemeral_force_push > protected_branch_write > test_only_change
@@ -1517,13 +1546,33 @@ function classifyForDemo(
     };
   }
   if (decision === 'DENY') {
-    // Default DENY fallback — distribute between autonomous_merge / freeze
-    const t: SemanticType = rand() < 0.5 ? 'autonomous_merge_attempt' : 'freeze_window_violation';
+    // Tool-aware DENY fallback. Don't random-pick between freeze /
+    // autonomous_merge for tools that aren't writes or merges — that's
+    // how the original demo bugs (list_secrets → autonomous_merge_attempt,
+    // list_branches → freeze_window_violation) snuck through.
+    if (looksLikeMerge) {
+      return {
+        semantic_type: 'autonomous_merge_attempt',
+        blast_radius: 'high',
+        blast_radius_reason: blastRadiusReasonFor('autonomous_merge_attempt', { tool, branch, args }),
+        confidence: 0.9,
+      };
+    }
+    if (isWrite && isProtected) {
+      return {
+        semantic_type: 'freeze_window_violation',
+        blast_radius: 'high',
+        blast_radius_reason: blastRadiusReasonFor('freeze_window_violation', { tool, branch, args, freezeLabel: 'Release Fridays 18:00 IST → Mon 09:00 IST' }),
+        confidence: 0.9,
+      };
+    }
+    // Catch-all DENY — credential_exposure is the most generic security
+    // story and never makes the row "look wrong" the way merge / freeze do.
     return {
-      semantic_type: t,
-      blast_radius: 'high',
-      blast_radius_reason: blastRadiusReasonFor(t, { tool, branch, args, freezeLabel: 'Release Fridays 18:00 IST → Mon 09:00 IST' }),
-      confidence: 0.7,
+      semantic_type: 'credential_exposure',
+      blast_radius: 'critical',
+      blast_radius_reason: blastRadiusReasonFor('credential_exposure', { tool, branch, args }),
+      confidence: 0.85,
     };
   }
   if (decision === 'REWRITE') {

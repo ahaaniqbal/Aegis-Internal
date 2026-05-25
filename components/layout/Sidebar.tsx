@@ -126,13 +126,13 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Insights',
     items: [
       // CIL Insights sits at the top of Insights because it's the
-      // moat surface. Token Spenditure (cost story) is secondary.
+      // moat surface. Token Expenditure (cost story) is secondary.
       { name: 'CIL Insights', href: '/dashboard/insights', icon: Sparkles },
       // Simulation Mode (Shadow Mode) — the GTM wedge surface. New
       // teams land here first: install observe-only, see a Risk
       // Report after 7 days, then escalate to enforce.
       { name: 'Simulation Mode', href: '/dashboard/simulation', icon: Eye },
-      { name: 'Token Spenditure', href: '/dashboard/token-spenditure', icon: Coins },
+      { name: 'Token Expenditure', href: '/dashboard/token-spenditure', icon: Coins },
     ],
   },
 ];

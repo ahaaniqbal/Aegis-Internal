@@ -47,6 +47,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { KillSwitchesSection } from '@/components/dashboard/KillSwitches';
 import {
   removeCustomAvatar,
   setCustomAvatarFromFile,
@@ -707,6 +708,11 @@ function SecuritySection({ reduce }: { reduce: boolean }) {
       initial={reduce ? false : 'hidden'}
       animate="show"
     >
+      {/* Kill Switches — emergency governance controls. */}
+      <motion.div variants={fadeUp}>
+        <KillSwitchesSection />
+      </motion.div>
+
       <motion.div variants={fadeUp}>
         <SettingsCard
           title="Two-factor authentication"

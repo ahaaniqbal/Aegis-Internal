@@ -24,6 +24,7 @@
  * onboarding, dashboard, email previews).
  */
 
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
 const AgentationWidget = dynamic(
@@ -32,6 +33,30 @@ const AgentationWidget = dynamic(
 );
 
 export default function AgentationGate() {
+  // First gate: build-time NODE_ENV. Tree-shaking removes the dynamic
+  // import + library entirely when NODE_ENV is 'production'.
   if (process.env.NODE_ENV === 'production') return null;
+
+  // Second gate: runtime hostname check. Belt-and-suspenders for the
+  // case where NODE_ENV isn't set to 'production' on a deployed URL
+  // (e.g. preview deploys, custom build configs). Only render on
+  // localhost / 127.0.0.1 / *.local. This prevents the widget from
+  // ever appearing on the Vercel preview, even if NODE_ENV slips.
+  return <LocalhostOnly />;
+}
+
+function LocalhostOnly() {
+  const [isLocal, setIsLocal] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const host = window.location.hostname;
+    setIsLocal(
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host.endsWith('.local'),
+    );
+  }, []);
+  if (!isLocal) return null;
   return <AgentationWidget />;
 }

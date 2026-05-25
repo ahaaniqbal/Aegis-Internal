@@ -48,6 +48,22 @@ const BAND_DEFS: Record<
   quarantine: { label: 'Quarantine', min: 0.0,  max: 0.75, tone: 'var(--error)' },
 };
 
+/**
+ * Demo-only forced quarantine. The trust system computes anomaly-rate
+ * naturally; in a live workspace this would derive from real CI failure
+ * streaks + push sequences. For the demo we hard-pin one agent so the
+ * Quarantine tab is never empty — that makes the trust system tangible.
+ *
+ * Reason copy comes from the canonical `sequence_anomaly` semantic_type:
+ * push_count > 5 AND ci_failure_streak > 3.
+ */
+const FORCED_QUARANTINE: Record<string, { trust: number; reason: string }> = {
+  devin: {
+    trust: 0.62,
+    reason: 'Sequence anomaly — 9 pushes with 5 consecutive CI failures',
+  },
+};
+
 export default function AgentsPage() {
   const reduce = useReducedMotion();
   const { sessionActions: runs, lastUpdated, refreshRuns } = useDashboardData();
@@ -98,7 +114,13 @@ export default function AgentsPage() {
     return Array.from(byAgent.entries())
       .map(([name, a]) => {
         const anomalyRate = a.runs > 0 ? a.anomalies / a.runs : 0;
-        const trust = Math.max(TRUST_FLOOR, 1 - anomalyRate);
+        const naturalTrust = Math.max(TRUST_FLOOR, 1 - anomalyRate);
+        // Demo override: forced quarantine for tangibility (see
+        // FORCED_QUARANTINE above). Applies only when the agent is in
+        // the override set.
+        const override = FORCED_QUARANTINE[name];
+        const trust = override ? override.trust : naturalTrust;
+        const quarantineReason = override ? override.reason : null;
         return {
           name,
           runs: a.runs,
@@ -110,6 +132,7 @@ export default function AgentsPage() {
           connectors: Array.from(a.connectors),
           repos: Array.from(a.repos),
           trust,
+          quarantineReason,
           mature: a.runs >= MATURE_BASELINE_RUNS,
         };
       })
@@ -336,6 +359,7 @@ function AgentCard({
     connectors: string[];
     repos: string[];
     trust: number;
+    quarantineReason: string | null;
     mature: boolean;
   };
 }) {
@@ -382,9 +406,14 @@ function AgentCard({
       <div className="flex items-start gap-3">
         <AgentMark name={agent.name} size="md" />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[14px] font-semibold tracking-[-0.005em] text-[var(--neutral-strong-950)]">
-            {agent.name}
-          </h3>
+          <Link
+            href={`/dashboard/agents/${encodeURIComponent(agent.name)}`}
+            className="truncate text-[14px] font-semibold tracking-[-0.005em] text-[var(--neutral-strong-950)] hover:text-[var(--primary-base)]"
+          >
+            <h3 className="truncate">
+              {agent.name}
+            </h3>
+          </Link>
           <p className="mt-0.5 inline-flex items-center gap-1 text-[11.5px] text-[var(--neutral-soft-400)]">
             <span>Last seen</span>
             <RelativeTime
@@ -403,7 +432,7 @@ function AgentCard({
                 Trust score
               </span>
               <span className="mt-1 block tabular-nums text-white/90">
-                {agent.trust.toFixed(2)} of 1.00
+                {trustPct} of 100
               </span>
             </span>
           }
@@ -422,7 +451,7 @@ function AgentCard({
             />
             <span className="uppercase tracking-[0.04em]">{trustTone.label}</span>
             <span aria-hidden className="opacity-50">·</span>
-            <span className="tabular-nums">{agent.trust.toFixed(2)}</span>
+            <span className="tabular-nums">{trustPct}</span>
           </span>
         </Tooltip>
       </div>
@@ -574,6 +603,49 @@ function AgentCard({
           />
         </Link>
       </div>
+
+      {/* Quarantine banner — only renders when this agent has been
+          quarantined by the trust system. Shows the human-readable
+          reason + a Review & restore CTA. Makes the trust system
+          tangible on the demo. */}
+      {agent.quarantineReason && (
+        <div
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[8px] border px-3 py-2"
+          style={{
+            backgroundColor: 'rgba(251, 55, 72, 0.08)',
+            borderColor: 'rgba(251, 55, 72, 0.28)',
+          }}
+        >
+          <div className="flex min-w-0 items-start gap-2">
+            <span
+              className="mt-0.5 inline-flex h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: 'var(--error)' }}
+              aria-hidden
+            />
+            <div className="min-w-0">
+              <p
+                className="text-[10.5px] font-semibold uppercase tracking-[0.08em]"
+                style={{ color: 'var(--error)' }}
+              >
+                Quarantined
+              </p>
+              <p className="mt-0.5 text-[11.5px] leading-[1.4] text-[var(--neutral-strong-950)]">
+                {agent.quarantineReason}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="shrink-0 rounded-[6px] border border-[var(--stroke-sub-300)] bg-[var(--white-0)] px-2.5 py-1 text-[11px] font-semibold text-[var(--neutral-strong-950)] transition-colors hover:bg-[var(--neutral-weak-50)]"
+          >
+            Review &amp; restore
+          </button>
+        </div>
+      )}
     </motion.article>
   );
 }

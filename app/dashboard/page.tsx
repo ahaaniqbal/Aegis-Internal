@@ -21,7 +21,8 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
+import { SemanticTypeChip, SEMANTIC_TYPE_CONFIG } from '@/components/ui/SemanticTypeChip';
+import type { SemanticType } from '@/lib/types';
 import { api } from '@/lib/api';
 import { useAutoRefresh, useUser } from '@/lib/hooks';
 import { MCPApproval, Metrics, SessionAction } from '@/lib/types';
@@ -232,6 +233,34 @@ export default function DashboardHomePage() {
         .slice(0, 5),
     [runs],
   );
+
+  /**
+   * Semantic_type distribution for this week's non-ALLOW classifications.
+   * Powers the inline stacked-bar chart in the CIL callout — makes the
+   * moat visible on the first dashboard view without navigating to
+   * CIL Insights.
+   */
+  const cilDistribution = useMemo(() => {
+    const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - ONE_WEEK;
+    const counts = new Map<SemanticType, number>();
+    for (const r of runs) {
+      if (!r.semantic_type) continue;
+      if (r.semantic_type === 'working_commit') continue;
+      if (r.semantic_type === 'test_only_change') continue;
+      if (r.semantic_type === 'ephemeral_force_push') continue;
+      if (new Date(r.timestamp).getTime() < cutoff) continue;
+      counts.set(r.semantic_type as SemanticType, (counts.get(r.semantic_type as SemanticType) ?? 0) + 1);
+    }
+    const total = Array.from(counts.values()).reduce((s, n) => s + n, 0);
+    if (total === 0) return { total: 0, rows: [] as { type: SemanticType; count: number; pct: number }[] };
+    return {
+      total,
+      rows: Array.from(counts.entries())
+        .map(([type, count]) => ({ type, count, pct: (count / total) * 100 }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }, [runs]);
 
   /**
    * REWRITE highlights — the canonical example for the dashboard hero
@@ -463,7 +492,7 @@ export default function DashboardHomePage() {
                 <IconMark icon={GitMergeIcon} color="var(--primary-base)" strokeWidth={2.25} />
                 <div>
                   <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
-                    REWRITE · the differentiator
+                    REWRITE in action
                   </p>
                   <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
                     {stats.rewritesThisWeek > 0
@@ -537,7 +566,7 @@ export default function DashboardHomePage() {
                     </span>
                   </p>
                   <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
-                    Layer 2 classifier identified the protected-branch write. Aegis spawned a safe feature branch from the working tree and opened a PR to{' '}
+                    The Contextual Intelligence Layer identified the protected-branch write. Aegis spawned a safe feature branch from the working tree and opened a PR to{' '}
                     <span className="font-mono text-[11px] text-[var(--neutral-strong-950)]">{recentRewrite.target_branch ?? 'main'}</span>{' '}
                     automatically.
                   </p>
@@ -634,7 +663,7 @@ export default function DashboardHomePage() {
               />
               <div>
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
-                  Contextual Intelligence · Layer 2
+                  Contextual Intelligence Layer
                 </p>
                 <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
                   {cilEvents.length > 0
@@ -658,15 +687,83 @@ export default function DashboardHomePage() {
           </div>
 
           {cilEvents.length > 0 ? (
-            <ul className="relative divide-y divide-[var(--stroke-soft-200)]">
-              {cilEvents.map((run) => (
-                <AnomalyListItem key={run.id} run={run} />
-              ))}
-            </ul>
+            <>
+              {/* Inline semantic_type distribution — stacked horizontal
+                  bar showing the breakdown of this week's non-ALLOW
+                  classifications. Makes the Layer 2 intelligence
+                  visible without navigating away. */}
+              {cilDistribution.total > 0 && (
+                <div className="relative border-b border-[var(--stroke-soft-200)] px-5 py-3.5">
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">
+                      Distribution this week
+                    </p>
+                    <p className="text-[10.5px] font-mono text-[var(--neutral-soft-400)]">
+                      {cilDistribution.total} {cilDistribution.total === 1 ? 'classification' : 'classifications'}
+                    </p>
+                  </div>
+                  {/* Stacked bar */}
+                  <div
+                    className="flex h-2.5 w-full overflow-hidden rounded-full ring-1 ring-[var(--stroke-soft-200)]"
+                    role="img"
+                    aria-label="semantic_type distribution stacked bar"
+                  >
+                    {cilDistribution.rows.map((row) => {
+                      const cfg = SEMANTIC_TYPE_CONFIG[row.type];
+                      const color =
+                        cfg?.tone === 'primary' ? 'var(--primary-base)'
+                        : cfg?.tone === 'error'  ? 'var(--error)'
+                        : cfg?.tone === 'warning'? 'var(--warning)'
+                        : cfg?.tone === 'success'? 'var(--success)'
+                        : 'var(--neutral-sub-600)';
+                      return (
+                        <span
+                          key={row.type}
+                          style={{ width: `${row.pct}%`, backgroundColor: color }}
+                          title={`${row.type}: ${row.count} (${row.pct.toFixed(0)}%)`}
+                        />
+                      );
+                    })}
+                  </div>
+                  {/* Legend */}
+                  <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
+                    {cilDistribution.rows.slice(0, 6).map((row) => {
+                      const cfg = SEMANTIC_TYPE_CONFIG[row.type];
+                      const color =
+                        cfg?.tone === 'primary' ? 'var(--primary-base)'
+                        : cfg?.tone === 'error'  ? 'var(--error)'
+                        : cfg?.tone === 'warning'? 'var(--warning)'
+                        : cfg?.tone === 'success'? 'var(--success)'
+                        : 'var(--neutral-sub-600)';
+                      return (
+                        <li key={row.type} className="inline-flex items-center gap-1.5">
+                          <span
+                            aria-hidden
+                            className="inline-block h-2 w-2 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-mono text-[10.5px] text-[var(--neutral-strong-950)]">
+                            {row.type}
+                          </span>
+                          <span className="font-mono text-[10.5px] tabular-nums text-[var(--neutral-soft-400)]">
+                            {row.count}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              <ul className="relative divide-y divide-[var(--stroke-soft-200)]">
+                {cilEvents.map((run) => (
+                  <AnomalyListItem key={run.id} run={run} />
+                ))}
+              </ul>
+            </>
           ) : (
             <div className="relative px-5 py-6">
               <p className="text-[12.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
-                The Layer 2 semantic classifier saw every agent action this week
+                The Contextual Intelligence Layer saw every agent action this week
                 land as a routine ALLOW (working_commit, test_only_change, or
                 ephemeral_force_push). No protected-branch writes, no freeze-window
                 violations, no credential exposure, no sensitive-path changes. The

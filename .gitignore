@@ -43,3 +43,7 @@ next-env.d.ts
 # Claude Code session state — launch.json + skill memory live here,
 # they shouldn't ship to teammates.
 .claude/
+
+# Pitch deck QA artifacts (regenerated from .pptx via the build script)
+/slide-*.jpg
+/Aegis-Pitch-Deck.pdf

@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import Sidebar from './Sidebar';
+import { KillSwitchBanner } from '@/components/dashboard/KillSwitches';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         className="min-h-dvh pt-12 lg:pt-0 lg:ml-[var(--sidebar-w)]"
         style={{ transition: 'margin-left var(--sidebar-transition)' }}
       >
+        {/* Kill switch banner — renders only when one or more
+            switches are active (read from localStorage). Sits above
+            the Topbar so it's visible on every dashboard route. */}
+        <KillSwitchBanner />
         {children}
       </main>
     </div>
