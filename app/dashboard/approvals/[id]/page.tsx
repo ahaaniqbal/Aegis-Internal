@@ -39,6 +39,7 @@ import {
 import Topbar from '@/components/layout/Topbar';
 import { AgentMark } from '@/components/ui/AgentMark';
 import { AnomalyChip, RiskScoreBar } from '@/components/ui/AnomalyChip';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { BlastRadiusChip } from '@/components/ui/BlastRadiusChip';
 import { Button } from '@/components/ui/Button';
 import { CodeChip } from '@/components/ui/CodeChip';
@@ -334,8 +335,170 @@ export default function ApprovalDetailPage({
               </motion.section>
             )}
 
-            {/* Anomaly callout — only when CIL flagged the same
-                tool + agent combination */}
+            {/* Layer 2 (CIL) reasoning trace — the canonical
+                semantic_type chip + the full 4-context evidence panel.
+                THIS is the moat made tangible. Every context signal
+                the classifier evaluated, exposed inline so an auditor
+                can read exactly why this action got this verdict.
+                If anyone asks "why did Aegis decide this?", this is
+                the answer. */}
+            {matchingRun?.semantic_type && (
+              <motion.section variants={fadeUp}>
+                <SemanticTypeChip
+                  semantic_type={matchingRun.semantic_type}
+                  reason={matchingRun.blast_radius_reason}
+                  variant="full"
+                />
+              </motion.section>
+            )}
+
+            {/* 4-Context Evidence Inspector — light card matching the
+                rest of the approval detail page. The "audit evidence"
+                feel comes from the mono key=value typography + 2x2
+                grid (stacks on mobile). Color-coded values via
+                semantic tokens. */}
+            {matchingRun && (matchingRun.session_context_snapshot || matchingRun.repo_context_snapshot || matchingRun.branch_context_snapshot || matchingRun.env_context_snapshot) && (
+              <motion.section
+                variants={fadeUp}
+                className="overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-3 sm:px-5">
+                  <div>
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
+                      Layer 2 · context evidence
+                    </p>
+                    <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                      Four signals the classifier evaluated
+                    </h2>
+                  </div>
+                  {matchingRun.classifier_confidence != null && (
+                    <span className="inline-flex items-baseline gap-1.5 font-mono text-[10.5px] text-[var(--neutral-soft-400)]">
+                      <span className="uppercase tracking-[0.08em]">confidence</span>
+                      <span className="font-semibold tabular-nums text-[var(--neutral-strong-950)]">
+                        {matchingRun.classifier_confidence.toFixed(2)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 divide-y divide-[var(--stroke-soft-200)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  {/* SessionContext */}
+                  {matchingRun.session_context_snapshot && (
+                    <ContextBlock title="SessionContext">
+                      <ContextRow label="agent" value={matchingRun.session_context_snapshot.agent_name ?? '—'} mono />
+                      <ContextRow label="human_initiator" value={matchingRun.session_context_snapshot.human_initiator ?? '—'} mono />
+                      <ContextRow label="push_count" value={String(matchingRun.session_context_snapshot.push_count ?? 0)} />
+                      <ContextRow
+                        label="denial_count"
+                        value={String(matchingRun.session_context_snapshot.denial_count ?? 0)}
+                        warn={(matchingRun.session_context_snapshot.denial_count ?? 0) >= 2}
+                      />
+                      <ContextRow
+                        label="ci_failure_streak"
+                        value={String(matchingRun.session_context_snapshot.ci_failure_streak ?? 0)}
+                        warn={(matchingRun.session_context_snapshot.ci_failure_streak ?? 0) >= 3}
+                      />
+                      <ContextRow label="workflow_stage" value={matchingRun.session_context_snapshot.workflow_stage ?? '—'} />
+                      <ContextRow label="linked_ticket" value={matchingRun.session_context_snapshot.linked_ticket ?? '—'} mono />
+                    </ContextBlock>
+                  )}
+
+                  {/* RepoContext */}
+                  {matchingRun.repo_context_snapshot && (
+                    <ContextBlock title="RepoContext">
+                      <ContextRow label="target_branch" value={matchingRun.repo_context_snapshot.target_branch ?? '—'} mono />
+                      <ContextRow
+                        label="is_protected_branch"
+                        value={matchingRun.repo_context_snapshot.is_protected_branch ? 'true' : 'false'}
+                        warn={matchingRun.repo_context_snapshot.is_protected_branch === true}
+                      />
+                      <ContextRow
+                        label="ci_passing"
+                        value={matchingRun.repo_context_snapshot.ci_passing ? 'true' : 'false'}
+                        warn={matchingRun.repo_context_snapshot.ci_passing === false}
+                        ok={matchingRun.repo_context_snapshot.ci_passing === true}
+                      />
+                      {matchingRun.repo_context_snapshot.ci_failure_reason && (
+                        <ContextRow label="ci_failure_reason" value={matchingRun.repo_context_snapshot.ci_failure_reason} mono />
+                      )}
+                      <ContextRow
+                        label="freeze_window_active"
+                        value={matchingRun.repo_context_snapshot.freeze_window_active ? 'true' : 'false'}
+                        warn={matchingRun.repo_context_snapshot.freeze_window_active === true}
+                      />
+                      {matchingRun.repo_context_snapshot.freeze_window_label && (
+                        <ContextRow label="freeze_window_label" value={matchingRun.repo_context_snapshot.freeze_window_label} />
+                      )}
+                      <ContextRow label="sensitivity_level" value={matchingRun.repo_context_snapshot.sensitivity_level ?? 'standard'} warn={matchingRun.repo_context_snapshot.sensitivity_level === 'critical'} />
+                    </ContextBlock>
+                  )}
+
+                  {/* BranchContext */}
+                  {matchingRun.branch_context_snapshot && (
+                    <ContextBlock title="BranchContext">
+                      <ContextRow label="branch_name" value={matchingRun.branch_context_snapshot.branch_name ?? '—'} mono />
+                      <ContextRow
+                        label="is_aegis_managed"
+                        value={matchingRun.branch_context_snapshot.is_aegis_managed ? 'true' : 'false'}
+                        ok={matchingRun.branch_context_snapshot.is_aegis_managed === true}
+                      />
+                      <ContextRow label="session_owner_match" value={matchingRun.branch_context_snapshot.session_owner_match ? 'true' : 'false'} />
+                      <ContextRow label="has_open_pr" value={matchingRun.branch_context_snapshot.has_open_pr ? 'true' : 'false'} />
+                      {matchingRun.branch_context_snapshot.pr_number && (
+                        <ContextRow label="pr_number" value={`#${matchingRun.branch_context_snapshot.pr_number}`} mono />
+                      )}
+                      <ContextRow
+                        label="branch_age"
+                        value={formatBranchAge(matchingRun.branch_context_snapshot.branch_age_seconds)}
+                      />
+                      <ContextRow label="commits_this_session" value={String(matchingRun.branch_context_snapshot.commit_count_this_session ?? 0)} />
+                    </ContextBlock>
+                  )}
+
+                  {/* EnvContext */}
+                  {matchingRun.env_context_snapshot && (
+                    <ContextBlock title="EnvContext">
+                      <ContextRow
+                        label="environment_tier"
+                        value={matchingRun.env_context_snapshot.environment_tier ?? 'dev'}
+                        warn={matchingRun.env_context_snapshot.environment_tier === 'production'}
+                      />
+                      <ContextRow
+                        label="active_incident"
+                        value={matchingRun.env_context_snapshot.active_incident ? 'true' : 'false'}
+                        warn={matchingRun.env_context_snapshot.active_incident === true}
+                      />
+                      {matchingRun.env_context_snapshot.incident_severity && (
+                        <ContextRow label="incident_severity" value={matchingRun.env_context_snapshot.incident_severity} warn />
+                      )}
+                      <ContextRow label="within_business_hours" value={matchingRun.env_context_snapshot.within_business_hours ? 'true' : 'false'} />
+                      <ContextRow label="timezone" value={matchingRun.env_context_snapshot.timezone ?? 'UTC'} mono />
+                      <ContextRow
+                        label="deploy_locked"
+                        value={matchingRun.env_context_snapshot.deploy_locked ? 'true' : 'false'}
+                        warn={matchingRun.env_context_snapshot.deploy_locked === true}
+                      />
+                    </ContextBlock>
+                  )}
+                </div>
+                {matchingRun.canonical_action_type && (
+                  <div className="border-t border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-3 sm:px-5">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-[10.5px]">
+                      <span className="font-bold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">canonical_action_type</span>
+                      <span className="text-[var(--stroke-sub-300)]">=</span>
+                      <span className="break-all font-semibold text-[var(--neutral-strong-950)]">{matchingRun.canonical_action_type}</span>
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                      Normalized action type that policies evaluate against. The same rule applies to this canonical type from any MCP server that emits it.
+                    </p>
+                  </div>
+                )}
+              </motion.section>
+            )}
+
+            {/* Behavioral amplifier callout — secondary signal when
+                CIL's statistical baseline ALSO flagged this action.
+                Shown below the canonical Layer 2 panel as a "and the
+                stats engine agrees" overlay. */}
             {matchingRun?.anomaly && (
               <motion.section variants={fadeUp}>
                 <AnomalyChip
@@ -561,4 +724,71 @@ function DetailCell({
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   );
+}
+
+// ─── 4-Context Evidence Inspector building blocks ────────────────────
+/**
+ * One context struct block. Light surface, mono uppercase title in
+ * muted gray, key=value rows below. Tight vertical rhythm.
+ */
+function ContextBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-[var(--white-0)] px-4 py-4 sm:px-5">
+      <p className="mb-3 font-mono text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]">
+        {title}
+      </p>
+      <dl className="space-y-1.5">{children}</dl>
+    </div>
+  );
+}
+
+/**
+ * One key:value row inside a ContextBlock. Renders as a key=value
+ * assignment, monospace throughout. `warn` uses --error for signals
+ * that triggered the verdict; `ok` uses --success for safe signals;
+ * everything else uses --neutral-strong-950.
+ */
+function ContextRow({
+  label,
+  value,
+  warn,
+  ok,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  warn?: boolean;
+  ok?: boolean;
+}) {
+  const valueColor = warn
+    ? 'var(--error)'
+    : ok
+      ? 'var(--success)'
+      : 'var(--neutral-strong-950)';
+  return (
+    <div className="flex items-baseline justify-between gap-3 font-mono text-[10.5px] leading-[1.5]">
+      <dt className="shrink-0 text-[var(--neutral-soft-400)]">{label}</dt>
+      <dd
+        className="min-w-0 break-all text-right font-semibold"
+        style={{ color: valueColor }}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/** Format branch_age_seconds into a human-readable string. */
+function formatBranchAge(seconds?: number): string {
+  if (seconds == null) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
+  return `${Math.round(seconds / 86400)}d`;
 }

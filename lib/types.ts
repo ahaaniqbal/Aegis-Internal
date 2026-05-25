@@ -6,6 +6,90 @@ export interface PaginatedResponse<T> {
   pages: number;
 }
 
+/**
+ * The canonical 10 semantic_types produced by Layer 2 (Contextual
+ * Intelligence Layer / Semantic Classifier). Each maps deterministically
+ * to a decision via the classifier rules. Backend `semantic_classifier.py`
+ * is the source of truth.
+ */
+export type SemanticType =
+  | 'working_commit'           // ALLOW — agent committing to its own aegis-managed branch
+  | 'ephemeral_force_push'     // ALLOW — force push to aegis_workstation by session owner, no open PR
+  | 'test_only_change'         // ALLOW — diff touches only test/docs files
+  | 'protected_branch_write'   // REWRITE — write to main/master/release branch
+  | 'freeze_window_violation'  // DENY — write during active freeze window
+  | 'credential_exposure'      // DENY (hard) — payload contains secrets pattern
+  | 'large_blast_radius_change'// REQUIRE_APPROVAL — diff touches > threshold files, not test-only
+  | 'sensitive_path_change'    // REQUIRE_APPROVAL — path matches .github/workflows, infra/, terraform/, auth/, security/
+  | 'autonomous_merge_attempt' // DENY — merge call without human PR approval
+  | 'sequence_anomaly';        // REQUIRE_APPROVAL — push_count > 5 AND ci_failure_streak > 3
+
+/** Canonical blast_radius values from the Layer 2 classifier. */
+export type BlastRadiusLevel = 'minimal' | 'low' | 'medium' | 'high' | 'critical';
+
+/**
+ * SessionContext — the agent's recent history in this session.
+ * One of the four context structs Layer 2 assembles before classification.
+ * Snapshot stored at decision time so the audit trail captures exactly
+ * what the classifier saw.
+ */
+export interface SessionContextSnapshot {
+  session_id?: string;
+  agent_id?: string;
+  agent_name?: string;
+  human_initiator?: string | null;
+  started_at?: string;
+  push_count?: number;
+  denial_count?: number;
+  ci_failure_streak?: number;
+  sequence_order?: number;
+  linked_ticket?: string | null;
+  workflow_stage?: 'planning' | 'coding' | 'review' | 'deploy' | 'incident';
+  active_approval_count?: number;
+  last_action_type?: string;
+}
+
+/** RepoContext — the state of the target repository right now. */
+export interface RepoContextSnapshot {
+  repo_id?: string;
+  owner?: string;
+  target_branch?: string;
+  is_protected_branch?: boolean;
+  protected_branches?: string[];
+  ci_passing?: boolean;
+  ci_failure_reason?: string | null;
+  freeze_window_active?: boolean;
+  freeze_window_label?: string | null;
+  freeze_window_expires?: string | null;
+  open_pr_count?: number;
+  last_deployment_at?: string | null;
+  sensitivity_level?: 'standard' | 'elevated' | 'critical';
+}
+
+/** BranchContext — the nature of this specific branch. */
+export interface BranchContextSnapshot {
+  branch_name?: string;
+  is_aegis_managed?: boolean;
+  session_owner_match?: boolean;
+  has_open_pr?: boolean;
+  pr_number?: number | null;
+  pr_reviewers?: string[];
+  branch_age_seconds?: number;
+  commit_count_this_session?: number;
+  last_pushed_by?: string | null;
+}
+
+/** EnvContext — deployment posture and incident state. */
+export interface EnvContextSnapshot {
+  environment_tier?: 'dev' | 'staging' | 'production';
+  active_incident?: boolean;
+  incident_id?: string | null;
+  incident_severity?: 'p1' | 'p2' | 'p3' | null;
+  within_business_hours?: boolean;
+  timezone?: string;
+  deploy_locked?: boolean;
+}
+
 export interface SessionAction {
   id: string;
   session_id: string;
@@ -78,6 +162,58 @@ export interface SessionAction {
     /** Relative expiry string ("4h", "Mon 9am"). Mocked in demo. */
     expires_in?: string;
   } | null;
+  /**
+   * Canonical Layer 2 (CIL / Semantic Classifier) outputs. These are
+   * the PRIMARY signals — `semantic_type` is what the policy engine
+   * acts on, not the raw tool name. `blast_radius` and
+   * `blast_radius_reason` carry the classifier's verdict and its
+   * reasoning trace. Optional so legacy data without classifier
+   * output still parses.
+   *
+   * Note: `anomaly` / `anomaly_reason` / `risk_score` above are the
+   * BEHAVIORAL AMPLIFIER signals (Series-A roadmap). They sit on top
+   * of the deterministic classifier; they are not the classifier
+   * itself. The canonical moat lives in `semantic_type`.
+   */
+  semantic_type?: SemanticType | null;
+  /**
+   * Human-readable reasoning the classifier emits explaining WHY this
+   * action got this semantic_type. Reads like an audit log line —
+   * "Direct write to protected/default branch 'main'" or "Detected
+   * exposed credentials: GitHub Token". Surfaced inline on Runs row
+   * + as the deny_reason on DENY responses.
+   */
+  blast_radius_reason?: string | null;
+  /**
+   * Classifier confidence (0.0–1.0). Mostly 1.0 for rule-based hits;
+   * lower for fallback / catch-all semantic_types.
+   */
+  classifier_confidence?: number | null;
+  /**
+   * The normalized canonical action type (`push_commit`,
+   * `create_pull_request`, `terraform_apply`, etc.). This is what
+   * makes policies portable across MCP servers — write a policy
+   * against `terraform_destroy` once, applies to every connector
+   * that produces that action type.
+   */
+  canonical_action_type?: string | null;
+  /**
+   * Snapshots of the 4 context structs at decision time. Stored so
+   * the audit trail captures EXACTLY what the classifier saw. The
+   * Approval detail page renders these as the reasoning trace.
+   */
+  session_context_snapshot?: SessionContextSnapshot | null;
+  repo_context_snapshot?: RepoContextSnapshot | null;
+  branch_context_snapshot?: BranchContextSnapshot | null;
+  env_context_snapshot?: EnvContextSnapshot | null;
+  /**
+   * REWRITE-specific fields. When `decision === 'REWRITE'`, these
+   * carry the auto-created branch + PR Aegis spawned to make the
+   * agent's intent safe.
+   */
+  rewrite_target_branch?: string | null;
+  rewrite_pr_url?: string | null;
+  rewrite_pr_number?: number | null;
 }
 
 export interface AggregatedSessionAction {
@@ -102,6 +238,23 @@ export interface AggregatedSessionAction {
    * row.
    */
   has_anomaly?: boolean;
+  /**
+   * Trigger that fired this session (chat / scheduled / webhook / test).
+   * Mirrors `Session.trigger_type`; powers the trigger-type tabs on
+   * the Sessions page.
+   */
+  trigger_type?: 'chat' | 'scheduled' | 'webhook' | 'test';
+  /**
+   * Unique semantic_types that fired during this session. Powers the
+   * "CIL classifications in this session" surface on the Sessions
+   * row + the CIL Insights distribution chart.
+   */
+  semantic_types?: SemanticType[];
+  /**
+   * Whether this session contains at least one REWRITE action. Used
+   * to highlight sessions that demonstrate the REWRITE flow visibly.
+   */
+  has_rewrite?: boolean;
 }
 
 /**
@@ -162,6 +315,22 @@ export interface Session {
    * session row.
    */
   has_anomaly?: boolean;
+  /**
+   * Where this session originated. Powers the trigger-type tabs on
+   * the Sessions page (All / Chats / Scheduled / Webhook / Tests).
+   *
+   *   `chat`      — engineer interactively asked the agent for help.
+   *   `scheduled` — cron-style trigger (nightly deploy, weekly sweep).
+   *   `webhook`   — external event fired the session (alert, PR open).
+   *   `test`      — CI / test-suite run that invoked the agent.
+   *
+   * Optional so legacy / pre-trigger data still parses cleanly.
+   */
+  trigger_type?: 'chat' | 'scheduled' | 'webhook' | 'test';
+  /** Unique semantic_types that fired during this session. */
+  semantic_types?: SemanticType[];
+  /** Whether this session contains at least one REWRITE action. */
+  has_rewrite?: boolean;
 }
 
 export interface User {

@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/Button';
 import { CodeChip } from '@/components/ui/CodeChip';
 import { ConnectorIcon, getConnectorForTool } from '@/components/ui/ConnectorMark';
 import { AnomalyChip, RiskScoreBar } from '@/components/ui/AnomalyChip';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { DelegationChain } from '@/components/ui/DelegationChain';
 import { ActionToolbar } from '@/components/ui/ActionToolbar';
 import { Input } from '@/components/ui/Input';
@@ -65,6 +66,7 @@ export default function RunsPage() {
   const searchParams = useSearchParams();
   const cilParam = searchParams?.get('cil') ?? null;
   const connectorParam = searchParams?.get('connector') ?? null;
+  const semanticTypeParam = searchParams?.get('semantic_type') ?? null;
   const buildClearUrl = (key: string): string => {
     const next = new URLSearchParams(searchParams?.toString() ?? '');
     next.delete(key);
@@ -102,6 +104,13 @@ export default function RunsPage() {
     // CIL anomaly deep-link — show only the flagged actions.
     const matchesAnomaly = cilParam !== 'anomalies' || run.anomaly === true;
 
+    // Canonical semantic_type deep-link — when ?semantic_type=<value>
+    // filter to actions classified as that semantic_type. The dashboard
+    // CIL callout deep-links here so reviewers land on a table already
+    // scoped to the type they clicked.
+    const matchesSemanticType =
+      !semanticTypeParam || run.semantic_type === semanticTypeParam;
+
     // Per-connector deep-link — use the same connector-inference
     // helper that powers the row's ConnectorIcon so the filter and the
     // rendered icon always agree on which connector a tool belongs to.
@@ -109,7 +118,7 @@ export default function RunsPage() {
       !connectorParam ||
       getConnectorForTool(run.tool_name) === connectorParam;
 
-    return matchesSearch && matchesDecision && matchesAnomaly && matchesConnector;
+    return matchesSearch && matchesDecision && matchesAnomaly && matchesSemanticType && matchesConnector;
   });
 
   // Client-side sort layered on top of the filter. Default is null
@@ -492,13 +501,16 @@ function RunRow({
           ) : null}
         </TD>
         <TD className="whitespace-nowrap">
-          {/* Policy + CIL anomaly stack. When CIL flags this action,
-              the warning chip sits directly under the policy verdict
-              so the reviewer's eye lands on it during a quick scan.
-              Hover the chip for the reason; full reason renders inside
-              the expanded row detail. */}
+          {/* Policy + Layer 2 semantic_type + behavioral amplifier
+              stack. semantic_type is the PRIMARY signal (canonical
+              CIL output). AnomalyChip below is the secondary
+              amplifier (Series-A behavioral baseline drift). */}
           <div className="flex flex-col items-start gap-1">
             <PolicyChip policy={run.policy} />
+            <SemanticTypeChip
+              semantic_type={run.semantic_type}
+              reason={run.blast_radius_reason}
+            />
             <AnomalyChip anomaly={run.anomaly} reason={run.anomaly_reason} />
           </div>
         </TD>
@@ -544,9 +556,23 @@ function RunRow({
       >
       {isExpanded && (
         <TRExpanded key="expanded" colSpan={9}>
-          {/* Anomaly callout — full-variant CIL anomaly banner at the
-              top of the expanded panel when the row was flagged. Makes
-              the reason visible without needing to hover the chip. */}
+          {/* Canonical Layer 2 reasoning trace — full-variant
+              SemanticTypeChip at the top of the expanded panel.
+              Shows the semantic_type the classifier emitted plus
+              the blast_radius_reason it surfaced. This is what
+              makes the moat visible at the action level. */}
+          {run.semantic_type && (
+            <div className="mb-4">
+              <SemanticTypeChip
+                semantic_type={run.semantic_type}
+                reason={run.blast_radius_reason}
+                variant="full"
+              />
+            </div>
+          )}
+          {/* Behavioral amplifier banner — secondary signal when CIL's
+              statistical baseline ALSO flagged this action. Shown
+              under the canonical chip, not in place of it. */}
           {run.anomaly && (
             <div className="mb-4">
               <AnomalyChip

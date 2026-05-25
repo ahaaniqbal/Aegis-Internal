@@ -1,17 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
+  Calendar,
   ChevronDown,
   ChevronRight,
   Clock,
+  FlaskConical,
   GitBranch,
   Hash,
   Layers,
+  MessageSquare,
   Timer,
+  Webhook,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useUser } from '@/lib/hooks';
 import { useDashboardData } from '@/lib/dashboardDataContext';
 import { AggregatedSessionAction, PaginatedResponse } from '@/lib/types';
@@ -29,6 +34,7 @@ import Topbar from '@/components/layout/Topbar';
 import { AgentMark } from '@/components/ui/AgentMark';
 import { ConnectorIcon, type ConnectorId } from '@/components/ui/ConnectorMark';
 import { AnomalyChip } from '@/components/ui/AnomalyChip';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { ActionToolbar } from '@/components/ui/ActionToolbar';
 import DecisionBadge from '@/components/ui/DecisionBadge';
 import EmptyState from '@/components/ui/EmptyState';
@@ -40,6 +46,25 @@ import { CodeChip } from '@/components/ui/CodeChip';
 import { PolicyChip } from '@/components/ui/PolicyChip';
 import { PullRequestLink } from '@/components/ui/PullRequestLink';
 import { DUR, EASE, fadeUp, fadeUpSm, staggerContainer } from '@/lib/motion';
+
+type TriggerTab = 'all' | 'chat' | 'scheduled' | 'webhook' | 'test';
+
+const TRIGGER_TABS: ReadonlyArray<{
+  id: TriggerTab;
+  /** Tab-strip label — plural ("Chats", "Tests") so chips read as
+   *  "filter by these things". */
+  label: string;
+  /** Per-row label — singular ("Chat", "Test") so the row reads as
+   *  "this single session was triggered by a chat / cron / etc.". */
+  rowLabel?: string;
+  icon: LucideIcon | null;
+}> = [
+  { id: 'all',       label: 'All',       icon: null },
+  { id: 'chat',      label: 'Chats',     rowLabel: 'Chat',      icon: MessageSquare },
+  { id: 'scheduled', label: 'Scheduled', rowLabel: 'Scheduled', icon: Calendar },
+  { id: 'webhook',   label: 'Webhook',   rowLabel: 'Webhook',   icon: Webhook },
+  { id: 'test',      label: 'Tests',     rowLabel: 'Test',      icon: FlaskConical },
+];
 
 export default function SessionsPage() {
   const [data, setData] = useState<
@@ -55,10 +80,43 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  // Trigger-type filter. Default = All so the user sees every session
+  // on first load. Switching tabs is purely a client-side filter on
+  // the paginated `data.items` — server returns the same payload.
+  const [activeTrigger, setActiveTrigger] = useState<TriggerTab>('all');
   const { user, isLoading: userLoading } = useUser();
   const reduce = useReducedMotion();
   const { fetchAggregatedPage, globalDataEpoch, lastUpdated } =
   useDashboardData();
+
+  // Per-trigger session counts. Recomputed whenever the page payload
+  // changes. Sessions without a `trigger_type` default to `chat` so
+  // legacy data still buckets cleanly.
+  const triggerCounts = useMemo(() => {
+    const counts: Record<TriggerTab, number> = {
+      all: 0,
+      chat: 0,
+      scheduled: 0,
+      webhook: 0,
+      test: 0,
+    };
+    for (const s of data.items) {
+      counts.all += 1;
+      const t: TriggerTab = (s.trigger_type ?? 'chat') as TriggerTab;
+      counts[t] = (counts[t] ?? 0) + 1;
+    }
+    return counts;
+  }, [data.items]);
+
+  // Filtered list — feeds the rendered Sessions table. We keep
+  // pagination on the raw `data.items` (server-side); the tab strip
+  // is a thin client-side filter on top.
+  const visibleSessions = useMemo(() => {
+    if (activeTrigger === 'all') return data.items;
+    return data.items.filter(
+      (s) => (s.trigger_type ?? 'chat') === activeTrigger,
+    );
+  }, [data.items, activeTrigger]);
 
   const fetchData = useCallback(
   async (options?: { soft?: boolean }) => {
@@ -144,7 +202,7 @@ export default function SessionsPage() {
         )}
 
         <motion.header
-          className="mb-6"
+          className="mb-5"
           variants={staggerContainer(0.05, 0.04)}
           initial={reduce ? false : 'hidden'}
           animate="show"
@@ -166,11 +224,52 @@ export default function SessionsPage() {
             className="mt-2 text-[13.5px] text-[var(--neutral-sub-600)]"
           >
             <span className="font-semibold text-[var(--neutral-strong-950)]">
-              {data.items.length.toLocaleString()}
+              {visibleSessions.length.toLocaleString()}
             </span>{' '}
-            {data.items.length === 1 ? 'session' : 'sessions'} · click any row to inspect its actions.
+            {visibleSessions.length === 1 ? 'session' : 'sessions'}
+            {activeTrigger !== 'all' && (
+              <>
+                {' '}from{' '}
+                <span className="font-semibold text-[var(--neutral-strong-950)]">
+                  {TRIGGER_TABS.find((t) => t.id === activeTrigger)?.label.toLowerCase()}
+                </span>{' '}
+                triggers
+              </>
+            )}{' '}
+            · click any row to inspect its actions.
           </motion.p>
         </motion.header>
+
+        {/* ─── Trigger-type tabs ────────────────────────────────────
+            Tab strip the user scopes the list by. Five tabs match the
+            session.trigger_type union: All / Chats / Scheduled /
+            Webhook / Tests. Each tab shows its count; the All tab is
+            always the page total, the rest reflect the filter result.
+            Mobile: horizontal scroll with a faded right edge so the
+            row stays single-line on narrow viewports — matches the
+            Connectors category strip pattern. */}
+        {data.items.length > 0 && (
+          <motion.nav
+            aria-label="Filter sessions by trigger type"
+            className="-mx-1 mb-5 overflow-x-auto px-1 [-ms-overflow-style:none] [mask-image:linear-gradient(to_right,black_calc(100%-24px),transparent)] [scrollbar-width:none] sm:[mask-image:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden"
+            initial={reduce ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.default, ease: EASE.out, delay: 0.12 }}
+          >
+            <div className="flex flex-nowrap items-center gap-1.5 sm:flex-wrap">
+              {TRIGGER_TABS.map((tab) => (
+                <TriggerTabChip
+                  key={tab.id}
+                  label={tab.label}
+                  icon={tab.icon}
+                  count={triggerCounts[tab.id]}
+                  active={activeTrigger === tab.id}
+                  onClick={() => setActiveTrigger(tab.id)}
+                />
+              ))}
+            </div>
+          </motion.nav>
+        )}
 
         {data.items.length === 0 ? (
           <div className="overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]">
@@ -179,6 +278,27 @@ export default function SessionsPage() {
               title="No sessions yet"
               description="A session groups every action from one agent conversation. They appear automatically once your agent runs its first tool."
             />
+          </div>
+        ) : visibleSessions.length === 0 ? (
+          // Filtered-empty: there ARE sessions, but none match the
+          // selected trigger. Show a quiet message + a one-tap return
+          // to the All tab so the user isn't stuck on an empty page.
+          <div className="overflow-hidden rounded-[12px] border border-dashed border-[var(--stroke-soft-200)] bg-white px-6 py-12 text-center">
+            <p className="text-[13px] text-[var(--neutral-sub-600)]">
+              No{' '}
+              <span className="font-semibold text-[var(--neutral-strong-950)]">
+                {TRIGGER_TABS.find((t) => t.id === activeTrigger)?.label.toLowerCase()}
+              </span>{' '}
+              sessions in this range.{' '}
+              <button
+                type="button"
+                onClick={() => setActiveTrigger('all')}
+                className="font-medium text-[var(--primary-base)] underline-offset-4 hover:underline"
+              >
+                Show all
+              </button>
+              .
+            </p>
           </div>
         ) : (
         <PaginatedLayout
@@ -189,6 +309,10 @@ export default function SessionsPage() {
             onPageChange={setPage}
           >
           <motion.div
+            // Re-key on the active trigger so the cascading fade
+            // re-fires when the user switches tabs. Without this the
+            // filtered list snaps in with no motion confirmation.
+            key={activeTrigger}
             className="overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
             initial={reduce ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -200,7 +324,7 @@ export default function SessionsPage() {
               initial={reduce ? false : 'hidden'}
               animate="show"
             >
-              {data.items.map((session) => (
+              {visibleSessions.map((session) => (
                 <SessionRow
                   key={session.session_id}
                   session={session}
@@ -295,17 +419,78 @@ function SessionRow({
             <span className="hidden sm:inline-flex">
               <CodeChip>{session.session_id?.substring(0, 8)}…</CodeChip>
             </span>
-            {/* CIL anomaly chip — surfaces session-level if any action
-                in this session was flagged. Reads as "this journey
-                had something unusual" at a scan. */}
-            {session.has_anomaly && (
-              <AnomalyChip
-                anomaly
-                reason="One or more actions in this session were flagged by the Contextual Intelligence Layer"
-              />
+            {/* REWRITE badge — highlight when this session contains a
+                REWRITE moment. REWRITE is the differentiator and the
+                row should advertise it. */}
+            {session.has_rewrite && (
+              <span
+                className="inline-flex h-[18px] items-center gap-1 rounded-[5px] border px-1.5 text-[10px] font-bold uppercase tracking-[0.06em]"
+                style={{
+                  backgroundColor: 'rgba(250, 115, 25, 0.12)',
+                  borderColor: 'rgba(250, 115, 25, 0.36)',
+                  color: 'var(--primary-dark)',
+                }}
+                title="Aegis transformed an unsafe action into a safe equivalent in this session"
+              >
+                REWRITE
+              </span>
             )}
+            {/* Layer 2 semantic_types — the canonical classifications
+                that fired in this session. Shows up to two of the most
+                significant types as inline chips so the row advertises
+                its CIL footprint. */}
+            {Array.isArray(session.semantic_types) && session.semantic_types
+              .filter(
+                (st) =>
+                  st !== 'working_commit' &&
+                  st !== 'test_only_change' &&
+                  st !== 'ephemeral_force_push',
+              )
+              .slice(0, 2)
+              .map((st) => (
+                <SemanticTypeChip key={st} semantic_type={st} />
+              ))}
+            {/* Behavioral anomaly — secondary amplifier signal (Series-A
+                roadmap). Only shows when the classifier output didn't
+                already paint enough of the picture. */}
+            {session.has_anomaly &&
+              !(Array.isArray(session.semantic_types) && session.semantic_types.some(
+                (st) => st !== 'working_commit' && st !== 'test_only_change' && st !== 'ephemeral_force_push',
+              )) && (
+                <AnomalyChip
+                  anomaly
+                  reason="Behavioral baseline deviation detected by CIL amplifier"
+                />
+              )}
           </div>
           <div className="mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--neutral-soft-400)]">
+            {/* Trigger affordance — surfaces WHY this session exists
+                at a scan (someone chatted with the agent, vs a cron
+                fired it, vs a webhook routed an alert in). Matches
+                the Connectors-style icon + label rhythm. */}
+            {session.trigger_type && (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  {(() => {
+                    const TIcon = TRIGGER_TABS.find(
+                      (t) => t.id === session.trigger_type,
+                    )?.icon;
+                    return TIcon ? (
+                      <TIcon className="h-3 w-3" strokeWidth={2} />
+                    ) : null;
+                  })()}
+                  <span className="font-medium text-[var(--neutral-sub-600)]">
+                    {(() => {
+                      const tab = TRIGGER_TABS.find(
+                        (t) => t.id === session.trigger_type,
+                      );
+                      return tab?.rowLabel ?? tab?.label;
+                    })()}
+                  </span>
+                </span>
+                <span className="text-[var(--stroke-sub-300)]">·</span>
+              </>
+            )}
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3 w-3" strokeWidth={2} />
               <RelativeTime timestamp={session.started_at} />
@@ -551,6 +736,61 @@ function SessionRow({
       )}
       </AnimatePresence>
     </motion.li>
+  );
+}
+
+// ─── Trigger filter tab chip ─────────────────────────────────────────
+/**
+ * One tab in the trigger-type filter row. Visual treatment mirrors the
+ * Connectors category chip so the trigger strip reads as one design
+ * family with the catalog filter — same border, same active-tint, same
+ * count-badge pill. The icon column is optional (the "All" tab has no
+ * icon, the rest each carry a small Lucide glyph).
+ */
+function TriggerTabChip({
+  label,
+  icon: Icon,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: LucideIcon | null;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        'group inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border px-2.5 py-[5px] text-[11.5px] font-medium transition-all duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-alpha-24)]',
+        active
+          ? 'border-[var(--primary-base)]/40 bg-[var(--primary-lighter)] text-[var(--primary-dark)] shadow-[0_1px_2px_rgba(250,115,25,0.10)]'
+          : 'border-[var(--stroke-soft-200)] bg-white text-[var(--neutral-sub-600)] hover:-translate-y-px hover:border-[var(--stroke-sub-300)] hover:text-[var(--neutral-strong-950)] hover:shadow-[0_2px_4px_rgba(23,23,23,0.05)]',
+      ].join(' ')}
+    >
+      {Icon && (
+        <Icon
+          className="h-3 w-3"
+          strokeWidth={active ? 2.25 : 2}
+          aria-hidden
+        />
+      )}
+      {label}
+      <span
+        className={[
+          'inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 text-[9.5px] font-bold tabular-nums transition-colors duration-150',
+          active
+            ? 'bg-[var(--primary-base)]/15 text-[var(--primary-dark)]'
+            : 'bg-[var(--neutral-weak-50)] text-[var(--neutral-soft-400)] group-hover:bg-[var(--neutral-soft-200)] group-hover:text-[var(--neutral-sub-600)]',
+        ].join(' ')}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 

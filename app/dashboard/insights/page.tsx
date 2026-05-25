@@ -56,9 +56,11 @@ import { CodeChip } from '@/components/ui/CodeChip';
 import { ConnectorIcon, getConnectorForTool } from '@/components/ui/ConnectorMark';
 import EmptyState from '@/components/ui/EmptyState';
 import { RelativeTime } from '@/components/ui/RelativeTime';
+import { SemanticTypeChip, SEMANTIC_TYPE_CONFIG } from '@/components/ui/SemanticTypeChip';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useDashboardData } from '@/lib/dashboardDataContext';
 import { DUR, EASE, fadeUp, fadeUpSm, staggerContainer } from '@/lib/motion';
+import type { SemanticType } from '@/lib/types';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const TREND_DAYS = 14;
@@ -72,6 +74,33 @@ const MATURE_BASELINE_RUNS = 20;
 export default function InsightsPage() {
   const reduce = useReducedMotion();
   const { sessionActions: runs, lastUpdated, refreshRuns } = useDashboardData();
+
+  // ── Semantic_type distribution (Layer 2 canonical view) ───────
+  // Counts every action's `semantic_type` for this-week's runs and
+  // returns a sorted list with absolute count + percentage. Powers
+  // the primary chart on this page — the moat made visible.
+  const semanticTypeDistribution = useMemo(() => {
+    const now = Date.now();
+    const weekAgo = now - ONE_WEEK_MS;
+    const runsThisWeek = runs.filter(
+      (r) => new Date(r.timestamp).getTime() >= weekAgo,
+    );
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const r of runsThisWeek) {
+      if (!r.semantic_type) continue;
+      counts.set(r.semantic_type, (counts.get(r.semantic_type) ?? 0) + 1);
+      total += 1;
+    }
+    if (total === 0) return [];
+    return Array.from(counts.entries())
+      .map(([semantic_type, count]) => ({
+        semantic_type,
+        count,
+        pct: (count / total) * 100,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [runs]);
 
   // ── At-a-glance stats ──────────────────────────────────────────
   const stats = useMemo(() => {
@@ -265,7 +294,7 @@ export default function InsightsPage() {
     <>
       <Topbar
         title="CIL Insights"
-        subtitle="Contextual Intelligence Layer"
+        subtitle="Contextual Intelligence Layer · Layer 2"
         lastUpdated={lastUpdated}
         onRefresh={refreshRuns}
         showDateRange
@@ -282,25 +311,184 @@ export default function InsightsPage() {
             variants={fadeUp}
             className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]"
           >
-            Behavioural intelligence · Last 7 days
+            Layer 2 · Contextual Intelligence Layer
           </motion.p>
           <motion.h1
             variants={fadeUp}
             className="text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[var(--neutral-strong-950)]"
           >
-            What your agent baselines tell us
+            Same action, different decision
           </motion.h1>
           <motion.p
             variants={fadeUp}
-            className="mt-2 text-[13.5px] text-[var(--neutral-sub-600)]"
+            className="mt-2 text-[13.5px] leading-[1.55] text-[var(--neutral-sub-600)]"
           >
-            {stats.totalAgents} agent{stats.totalAgents === 1 ? '' : 's'} ·{' '}
-            {stats.matureBaselines} mature baseline
-            {stats.matureBaselines === 1 ? '' : 's'} ·{' '}
-            {stats.anomaliesThisWeek} anomal
-            {stats.anomaliesThisWeek === 1 ? 'y' : 'ies'} flagged this week.
+            The deterministic semantic classifier assembles four context signals (Session, Repo, Branch, Env) in real time and maps every tool call to one of ten <code className="font-mono text-[12px] text-[var(--neutral-strong-950)]">semantic_type</code> values. No LLM in the decision path. The same raw action becomes ALLOW or DENY depending entirely on context. **That is the moat.**
           </motion.p>
         </motion.header>
+
+        {/* ─── Canonical example: same action, two decisions ───────
+            Light card matching the rest of the product. The "diff
+            inspector" feel comes from the side-by-side mono key=value
+            layout, not from inverting the surface. Color-coded values
+            via semantic tokens. Stacks on mobile. */}
+        <motion.section
+          className="mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+          initial={reduce ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.16 }}
+        >
+          <div className="border-b border-[var(--stroke-soft-200)] px-4 py-3 sm:px-5">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
+              Layer 2 · canonical example
+            </p>
+            <h2 className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+              <code className="font-mono text-[13px]">git push --force</code>
+              <span className="text-[11.5px] font-normal text-[var(--neutral-sub-600)]">
+                identical tool call, opposite verdict
+              </span>
+            </h2>
+          </div>
+
+          {/* Two-column diff. Stacks on mobile (sm:grid-cols-2). */}
+          <div className="grid grid-cols-1 divide-y divide-[var(--stroke-soft-200)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            {/* ALLOW path */}
+            <div className="px-4 py-4 sm:px-5">
+              <div className="flex items-baseline justify-between gap-2 pb-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--success)]">
+                  scenario_a
+                </p>
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--success)]">
+                  ALLOW
+                </span>
+              </div>
+              <dl className="space-y-1.5 font-mono text-[10.5px] leading-[1.5]">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">branch_name</dt>
+                  <dd className="break-all text-right font-semibold text-[var(--neutral-strong-950)]">aegis_workstation</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">is_aegis_managed</dt>
+                  <dd className="font-semibold text-[var(--success)]">true</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">session_owner_match</dt>
+                  <dd className="font-semibold text-[var(--success)]">true</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">has_open_pr</dt>
+                  <dd className="font-semibold text-[var(--success)]">false</dd>
+                </div>
+              </dl>
+              <div className="mt-4 rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-3 py-2">
+                <p className="break-all font-mono text-[10.5px] leading-[1.5]">
+                  <span className="text-[var(--neutral-soft-400)]">semantic_type = </span>
+                  <span className="font-semibold text-[var(--success)]">ephemeral_force_push</span>
+                </p>
+              </div>
+              <p className="mt-3 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                Force-push to an aegis-managed branch by the session owner with no open PR. Safe by classification.
+              </p>
+            </div>
+
+            {/* DENY path */}
+            <div className="px-4 py-4 sm:px-5">
+              <div className="flex items-baseline justify-between gap-2 pb-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--error)]">
+                  scenario_b
+                </p>
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--error)]">
+                  DENY
+                </span>
+              </div>
+              <dl className="space-y-1.5 font-mono text-[10.5px] leading-[1.5]">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">target_branch</dt>
+                  <dd className="break-all text-right font-semibold text-[var(--neutral-strong-950)]">main</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">is_protected_branch</dt>
+                  <dd className="font-semibold text-[var(--error)]">true</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">freeze_window_active</dt>
+                  <dd className="font-semibold text-[var(--error)]">true</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-[var(--neutral-soft-400)]">ci_passing</dt>
+                  <dd className="font-semibold text-[var(--error)]">false</dd>
+                </div>
+              </dl>
+              <div className="mt-4 rounded-[6px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-3 py-2">
+                <p className="break-all font-mono text-[10.5px] leading-[1.5]">
+                  <span className="text-[var(--neutral-soft-400)]">semantic_type = </span>
+                  <span className="font-semibold text-[var(--error)]">freeze_window_violation</span>
+                </p>
+              </div>
+              <p className="mt-3 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                Same tool call. Protected branch during an active release freeze with failing CI. Hard pre-execution DENY.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer — the classifier signature */}
+          <div className="border-t border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-2.5 sm:px-5">
+            <p className="break-all font-mono text-[10.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+              <span className="text-[var(--neutral-soft-400)]">// </span>
+              classify(tool_name, args, session_context, repo_context, branch_context, env_context) → semantic_type, blast_radius
+            </p>
+          </div>
+        </motion.section>
+
+        {/* ─── Semantic type distribution ────────────────────────── */}
+        {semanticTypeDistribution.length > 0 && (
+          <motion.section
+            className="mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.2 }}
+          >
+            <div className="border-b border-[var(--stroke-soft-200)] px-5 py-3">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
+                Layer 2 · semantic_type distribution
+              </p>
+              <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                {semanticTypeDistribution.reduce((s, x) => s + x.count, 0)} classifications this week
+              </h2>
+              <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                Every tool call the classifier saw, mapped to one of the canonical 10 semantic_types. Click any row to drill into the Runs view filtered to that type.
+              </p>
+            </div>
+            <ul className="divide-y divide-[var(--stroke-soft-200)]">
+              {semanticTypeDistribution.map((row) => (
+                <SemanticTypeDistributionRow
+                  key={row.semantic_type}
+                  semantic_type={row.semantic_type}
+                  count={row.count}
+                  pct={row.pct}
+                />
+              ))}
+            </ul>
+          </motion.section>
+        )}
+
+        {/* ─── Behavioral amplifier section divider ───────────────── */}
+        <motion.div
+          className="mb-4 border-t border-[var(--stroke-soft-200)] pt-6"
+          initial={reduce ? false : { opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: DUR.default, ease: EASE.out, delay: 0.24 }}
+        >
+          <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--neutral-soft-400)]">
+            Layer 2 amplifier · Behavioral baselines · Roadmap
+          </p>
+          <h2 className="text-[18px] font-semibold leading-[1.2] tracking-[-0.02em] text-[var(--neutral-strong-950)]">
+            What your agent baselines tell us
+          </h2>
+          <p className="mt-1 text-[12.5px] leading-[1.55] text-[var(--neutral-sub-600)]">
+            Statistical baselines per agent are the Series-A roadmap amplifier on top of the deterministic classifier above. Below: anomaly trends, risk distribution, agent ranking — useful as secondary signals, not the moat itself.
+          </p>
+        </motion.div>
 
         {/* ─── At-a-glance row ────────────────────────────────────── */}
         <motion.section
@@ -814,5 +1002,84 @@ function AgentRow({
         />
       </div>
     </motion.li>
+  );
+}
+
+/**
+ * One row in the Layer 2 semantic_type distribution. Renders the
+ * canonical chip + a horizontal bar showing share of weekly volume +
+ * absolute count. Click-through deep-links into the Runs view
+ * filtered to that semantic_type.
+ */
+function SemanticTypeDistributionRow({
+  semantic_type,
+  count,
+  pct,
+}: {
+  semantic_type: string;
+  count: number;
+  pct: number;
+}) {
+  const cfg = SEMANTIC_TYPE_CONFIG[semantic_type as SemanticType];
+  const decisionTone: Record<string, string> = {
+    ALLOW: 'var(--success)',
+    DENY: 'var(--error)',
+    REWRITE: 'var(--primary-base)',
+    REQUIRE_APPROVAL: 'var(--warning)',
+  };
+  const barColor = cfg ? decisionTone[cfg.decision] ?? 'var(--neutral-soft-400)' : 'var(--neutral-soft-400)';
+  return (
+    <li>
+      <Link
+        href={`/dashboard/runs?semantic_type=${semantic_type}`}
+        className="group flex items-center gap-3 px-5 py-3 transition-colors duration-150 hover:bg-[var(--primary-lighter)]/40"
+      >
+        <div className="w-[200px] shrink-0">
+          <SemanticTypeChip semantic_type={semantic_type as SemanticType} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span
+            aria-hidden
+            className="relative block h-[6px] overflow-hidden rounded-full bg-[var(--neutral-weak-50)] ring-1 ring-[var(--stroke-soft-200)]"
+          >
+            <span
+              className="absolute inset-y-0 left-0 rounded-full"
+              style={{
+                width: `${Math.max(pct, 1.5)}%`,
+                backgroundColor: barColor,
+              }}
+            />
+          </span>
+        </div>
+        <span className="w-[60px] shrink-0 text-right text-[11.5px] font-semibold tabular-nums text-[var(--neutral-strong-950)]">
+          {count}
+        </span>
+        <span className="hidden w-[44px] shrink-0 text-right text-[11px] tabular-nums text-[var(--neutral-soft-400)] sm:inline">
+          {pct.toFixed(1)}%
+        </span>
+        <ChevronRightIcon className="ml-1 h-3.5 w-3.5 shrink-0 text-[var(--neutral-soft-400)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
+      </Link>
+    </li>
+  );
+}
+
+// Tiny chevron-right SVG inline so this row doesn't need to re-import
+// from lucide (avoids upstream-import churn).
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
   );
 }

@@ -8,17 +8,23 @@
 import { api } from './api';
 import type {
   AggregatedSessionAction,
+  BlastRadiusLevel,
+  BranchContextSnapshot,
+  EnvContextSnapshot,
   MCPApproval,
   Metrics,
   PaginatedResponse,
   Repo,
+  RepoContextSnapshot,
   RoomDetails,
   RoomInvite,
   RoomMember,
   RoomSessionAction,
   RoomSummary,
+  SemanticType,
   Session,
   SessionAction,
+  SessionContextSnapshot,
   TokenMeterResponse,
 } from './types';
 
@@ -77,9 +83,45 @@ const BRANCHES = [
   'feature/auth-flow',
   'feature/rate-limits',
   'fix/approval-race',
+  // Canonical Aegis-managed working branch. Per the spec, this is the
+  // persistent ephemeral branch where agents do iterative commits.
+  // `ephemeral_force_push` semantic_type fires when force-pushing here.
+  'aegis_workstation',
+  // Legacy / pre-canonical naming pattern. Kept so existing demo
+  // sessions don't all collapse to one branch; the spec calls these
+  // out as deprecated but they still appear in older logs.
   'aegis/sess_8f3a/refactor-policies',
   'aegis/sess_b21c/add-webhooks',
   'chore/dependency-bump',
+];
+
+// Protected branches — used by the canonical classifier to detect
+// `protected_branch_write` and `freeze_window_violation` semantic_types.
+const PROTECTED_BRANCHES = new Set(['main', 'master', 'release']);
+
+// Sensitive paths — used by the classifier to detect
+// `sensitive_path_change` semantic_type. Mirrors the backend's
+// `policies/sensitive_path_policy.py` pattern set.
+const SENSITIVE_PATH_PREFIXES = [
+  '.github/workflows/',
+  'infra/',
+  'terraform/',
+  'auth/',
+  'security/',
+  '.github/actions/',
+  'kubernetes/',
+  'helm/',
+];
+
+// Test/docs path prefixes — used to detect `test_only_change`.
+const TEST_PATH_PREFIXES = [
+  'tests/',
+  'test/',
+  '__tests__/',
+  'spec/',
+  'docs/',
+  'README',
+  'CHANGELOG',
 ];
 
 // ── Multi-connector tool catalog ─────────────────────────────────────────
@@ -811,6 +853,59 @@ const ARCHETYPE_BY_SESSION_ID: Map<string, SessionArchetype> = new Map(
   SESSION_IDS.map((id) => [id, pickArchetype()]),
 );
 
+// ── Session trigger taxonomy ─────────────────────────────────────────
+//
+// Most agent sessions arrive through one of four channels: an engineer
+// chatting with the agent, a cron-style schedule, an external webhook
+// (alert / PR opened / push to main), or a CI test suite invoking the
+// agent in a sandbox. The Sessions page exposes these as a tab strip
+// so reviewers can scope the list to whatever trigger they care about.
+//
+// We pin each archetype to its "natural" trigger and override roughly
+// 1-in-4 sessions to `test` (deterministic by uuid hash, not rand(),
+// so we don't shift the seeded RNG and re-roll downstream demo data).
+// The deterministic override guarantees the Tests tab is always
+// populated without changing anything else.
+type TriggerType = 'chat' | 'scheduled' | 'webhook' | 'test';
+
+const TRIGGER_BY_ARCHETYPE: Record<string, TriggerType> = {
+  feature_dev: 'chat',
+  incident_triage: 'webhook',
+  pure_code: 'chat',
+  release_deploy: 'scheduled',
+  data_migration: 'scheduled',
+  infra_change: 'chat',
+  planning_sweep: 'scheduled',
+  incident_loop: 'webhook',
+  cluster_ops: 'chat',
+  edge_deploy: 'scheduled',
+  docs_lookup: 'chat',
+};
+
+/** Cheap, deterministic string hash. Used here so the trigger override
+ *  doesn't consume entropy from the seeded rand() and shift the demo
+ *  data downstream. */
+function triggerHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+const TRIGGER_BY_SESSION_ID: Map<string, TriggerType> = new Map(
+  SESSION_IDS.map((id) => {
+    const archetype = ARCHETYPE_BY_SESSION_ID.get(id);
+    const base: TriggerType = archetype
+      ? TRIGGER_BY_ARCHETYPE[archetype.name] ?? 'chat'
+      : 'chat';
+    // ~1-in-4 sessions become `test` regardless of archetype so the
+    // Tests tab on the Sessions page is never empty.
+    if (triggerHash(id) % 4 === 0) return [id, 'test'];
+    return [id, base];
+  }),
+);
+
 const POOL_BY_CONNECTOR: Record<ConnectorSlug, readonly string[]> = {
   github: GITHUB_TOOLS,
   slack: SLACK_TOOLS,
@@ -1151,6 +1246,434 @@ function maybeAnomalyFor(
   return { anomaly: true, anomaly_reason: pick(reasons) };
 }
 
+// ─── Canonical Layer 2 (CIL / Semantic Classifier) ───────────────────────
+//
+// Mirrors the backend `lib/semantic_classifier.py`. Produces the 10
+// canonical semantic_types deterministically from (tool, decision,
+// branch, args). The decision is DERIVED from the semantic_type via
+// the canonical mapping — same flow as the live classifier.
+//
+// In this demo layer, we work backwards from the existing (tool,
+// decision, branch) to a CONSISTENT semantic_type. This keeps the
+// existing decision distribution but adds the canonical reasoning
+// trace on top.
+
+/** Canonical action_type for each tool name. Mirrors the Layer 1
+ *  normalization that makes policies portable across MCP servers. */
+const CANONICAL_ACTION_TYPE: Record<string, string> = {
+  // GitHub
+  push_files: 'push_commit',
+  create_or_update_file: 'push_commit',
+  create_branch: 'create_branch',
+  create_pull_request: 'create_pull_request',
+  merge_pull_request: 'merge_pull_request',
+  get_file_contents: 'read_file',
+  list_repository_files: 'read_repo',
+  get_repository: 'read_repo',
+  search_code: 'read_repo',
+  search_repositories: 'read_repo',
+  list_branches: 'read_repo',
+  list_issues: 'read_issue',
+  get_issue: 'read_issue',
+  create_issue: 'create_issue',
+  get_pull_request: 'read_pr',
+  search_issues: 'read_issue',
+  get_latest_commit: 'read_repo',
+  // Slack
+  post_message: 'post_message',
+  post_thread_reply: 'post_message',
+  upload_file: 'upload_file',
+  invite_user_to_channel: 'modify_channel',
+  add_reaction: 'react_to_message',
+  list_channels: 'read_channels',
+  list_users: 'read_users',
+  get_channel_history: 'read_messages',
+  get_thread_replies: 'read_messages',
+  search_messages: 'read_messages',
+  delete_message: 'delete_message',
+  archive_channel: 'modify_channel',
+  kick_user: 'modify_channel',
+  // Linear / Jira
+  update_issue: 'update_issue',
+  add_issue_comment: 'add_comment',
+  add_comment: 'add_comment',
+  create_subtask: 'create_issue',
+  move_issue: 'transition_issue',
+  assign_issue: 'update_issue',
+  set_priority: 'update_issue',
+  transition_issue: 'transition_issue',
+  // GitHub Actions
+  dispatch_workflow: 'trigger_workflow_dispatch',
+  rerun_workflow: 'rerun_workflow',
+  cancel_workflow_run: 'cancel_workflow',
+  // Terraform
+  terraform_apply: 'terraform_apply',
+  terraform_destroy: 'terraform_destroy',
+  terraform_plan: 'terraform_plan',
+  // Postgres
+  query_select: 'execute_query_read',
+  query_insert: 'execute_query_write',
+  query_update: 'execute_query_write',
+  query_delete: 'execute_query_destructive',
+  drop_table: 'execute_query_destructive',
+  truncate_table: 'execute_query_destructive',
+  run_migration: 'execute_migration',
+  alter_table: 'alter_table',
+};
+
+/** Canonical semantic_type → decision mapping. Source of truth lives
+ *  in the spec; copied here so the demo's decisions stay consistent
+ *  with the classifier's outputs. */
+const SEMANTIC_TYPE_TO_DECISION: Record<SemanticType, string> = {
+  working_commit:            'ALLOW',
+  ephemeral_force_push:      'ALLOW',
+  test_only_change:          'ALLOW',
+  protected_branch_write:    'REWRITE',
+  freeze_window_violation:   'DENY',
+  credential_exposure:       'DENY',
+  large_blast_radius_change: 'REQUIRE_APPROVAL',
+  sensitive_path_change:     'REQUIRE_APPROVAL',
+  autonomous_merge_attempt:  'DENY',
+  sequence_anomaly:          'REQUIRE_APPROVAL',
+};
+
+/** Canonical semantic_type → blast_radius mapping. The classifier's
+ *  baseline output; specific actions can override (e.g. a `terraform_apply`
+ *  that's also a sensitive_path_change gets bumped to critical). */
+const SEMANTIC_TYPE_TO_BLAST: Record<SemanticType, BlastRadiusLevel> = {
+  working_commit:            'low',
+  ephemeral_force_push:      'minimal',
+  test_only_change:          'low',
+  protected_branch_write:    'high',
+  freeze_window_violation:   'high',
+  credential_exposure:       'critical',
+  large_blast_radius_change: 'high',
+  sensitive_path_change:     'critical',
+  autonomous_merge_attempt:  'high',
+  sequence_anomaly:          'high',
+};
+
+/** Generate the human-readable reasoning string the classifier emits.
+ *  Reads like a real audit log line — "Direct write to protected branch
+ *  'main' during active release freeze (Fri 18:00 → Mon 09:00 IST)". */
+function blastRadiusReasonFor(
+  semanticType: SemanticType,
+  ctx: {
+    tool: string;
+    branch?: string | null;
+    repo?: string;
+    args?: Record<string, unknown>;
+    freezeLabel?: string;
+  },
+): string {
+  const branch = ctx.branch ?? 'main';
+  switch (semanticType) {
+    case 'working_commit':
+      return `Routine commit by session owner to working branch '${branch}'. No protected-branch or freeze-window flags fired.`;
+    case 'ephemeral_force_push':
+      return `Force-push to aegis-managed working branch '${branch}' by session owner. No open PR on branch; safe per ephemeral_force_push rule.`;
+    case 'test_only_change':
+      return `Diff touches only paths matching tests/, docs/, or spec/. Classified test_only_change; routine ALLOW.`;
+    case 'protected_branch_write':
+      return `Direct write to protected/default branch '${branch}'. Auto-rewritten to feature branch with PR opened to '${branch}'.`;
+    case 'freeze_window_violation':
+      return `Write attempted during active freeze window${ctx.freezeLabel ? ` (${ctx.freezeLabel})` : ''} on protected branch '${branch}'. Hard DENY per P10.`;
+    case 'credential_exposure': {
+      const cred = ['OpenAI API Key', 'GitHub Token', 'Stripe API Key', 'AWS Access Key', 'Anthropic API Key', 'Bearer token'];
+      return `Detected exposed credentials: ${pick(cred)}. Hard pre-policy DENY before payload reaches downstream MCP.`;
+    }
+    case 'large_blast_radius_change': {
+      const fileCount = 50 + Math.floor(rand() * 80);
+      return `Diff touches ${fileCount} files across ${1 + Math.floor(rand() * 4)} packages. Exceeds blast-radius threshold; routed to Approval.`;
+    }
+    case 'sensitive_path_change': {
+      const path = pick(['.github/workflows/deploy.yml', 'terraform/modules/network/main.tf', 'auth/oauth.ts', 'security/csp.config.ts', 'infra/k8s/prod-ingress.yaml']);
+      return `Write to sensitive path '${path}'. Requires human approval per P7.`;
+    }
+    case 'autonomous_merge_attempt':
+      return `merge_pull_request called without recorded human PR approval. Hard DENY per P4.`;
+    case 'sequence_anomaly': {
+      const pushCount = 6 + Math.floor(rand() * 4);
+      const failures = 3 + Math.floor(rand() * 3);
+      return `Agent has pushed ${pushCount}× this session with ${failures} consecutive CI failures. Sequence anomaly — paused for review.`;
+    }
+  }
+}
+
+/**
+ * Classify a demo action into its canonical semantic_type. Works
+ * backwards from the (tool, decision, branch) the demo data already
+ * picked, choosing the semantic_type that's most consistent. For
+ * specific high-value canonical examples (protected_branch_write,
+ * freeze_window_violation), we override with the dramatic version
+ * so investors and customers see the moat at a glance.
+ */
+function classifyForDemo(
+  tool: string,
+  decision: string,
+  branch: string | null,
+  args: Record<string, unknown>,
+): { semantic_type: SemanticType; blast_radius: BlastRadiusLevel; blast_radius_reason: string; confidence: number } {
+  const isWrite = WRITE_TOOLS_RAW.has(tool);
+  const branchLc = (branch ?? '').toLowerCase();
+  const isProtected = PROTECTED_BRANCHES.has(branchLc);
+  const isAegis = branchLc === 'aegis_workstation' || branchLc.startsWith('aegis/');
+  const isFeature = branchLc.startsWith('feature/') || branchLc.startsWith('fix/') || branchLc.startsWith('chore/');
+
+  // Specific path-aware checks for write tools. Look at args for path hints.
+  const path = (args.path as string) ?? '';
+  const message = (args.message as string) ?? '';
+  const content = (args.content as string) ?? '';
+  const sql = (args.sql as string) ?? '';
+  const payloadText = `${path} ${message} ${content} ${sql}`.toLowerCase();
+
+  const looksSensitive = SENSITIVE_PATH_PREFIXES.some((p) => path.startsWith(p));
+  const looksTestOnly = !!path && TEST_PATH_PREFIXES.some((p) => path.startsWith(p));
+  const looksLikeSecret =
+    /api[_-]?key|token|password|secret|bearer|aws_access|stripe_key/i.test(payloadText) ||
+    /\.env|\.pem|\.key|credentials\.json|secrets\.yaml/.test(path);
+  const looksLikeMerge = tool === 'merge_pull_request';
+  const looksDestructive = /drop\s+table|truncate|delete\s+from/i.test(sql);
+
+  // Priority order matches the backend classifier:
+  // credential_exposure > sensitive_path_change > freeze_window_violation
+  // > ephemeral_force_push > protected_branch_write > test_only_change
+  // > sequence_anomaly > autonomous_merge_attempt > working_commit / default
+
+  if (isWrite && looksLikeSecret) {
+    return {
+      semantic_type: 'credential_exposure',
+      blast_radius: 'critical',
+      blast_radius_reason: blastRadiusReasonFor('credential_exposure', { tool, branch, args }),
+      confidence: 0.95,
+    };
+  }
+  if (isWrite && looksSensitive) {
+    return {
+      semantic_type: 'sensitive_path_change',
+      blast_radius: 'critical',
+      blast_radius_reason: blastRadiusReasonFor('sensitive_path_change', { tool, branch, args }),
+      confidence: 0.92,
+    };
+  }
+  // Freeze window — only when decision is DENY and branch is protected
+  if (isWrite && isProtected && decision === 'DENY') {
+    return {
+      semantic_type: 'freeze_window_violation',
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor('freeze_window_violation', { tool, branch, args, freezeLabel: 'Release Fridays 18:00 IST → Mon 09:00 IST' }),
+      confidence: 1.0,
+    };
+  }
+  if (isWrite && isAegis) {
+    return {
+      semantic_type: 'ephemeral_force_push',
+      blast_radius: 'minimal',
+      blast_radius_reason: blastRadiusReasonFor('ephemeral_force_push', { tool, branch, args }),
+      confidence: 1.0,
+    };
+  }
+  if (isWrite && isProtected) {
+    // Decision should be REWRITE here per the canonical mapping
+    return {
+      semantic_type: 'protected_branch_write',
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor('protected_branch_write', { tool, branch, args }),
+      confidence: 1.0,
+    };
+  }
+  if (isWrite && looksTestOnly) {
+    return {
+      semantic_type: 'test_only_change',
+      blast_radius: 'low',
+      blast_radius_reason: blastRadiusReasonFor('test_only_change', { tool, branch, args }),
+      confidence: 0.9,
+    };
+  }
+  if (looksLikeMerge && decision === 'DENY') {
+    return {
+      semantic_type: 'autonomous_merge_attempt',
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor('autonomous_merge_attempt', { tool, branch, args }),
+      confidence: 0.9,
+    };
+  }
+  if (looksDestructive && decision === 'REQUIRE_APPROVAL') {
+    return {
+      semantic_type: 'large_blast_radius_change',
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor('large_blast_radius_change', { tool, branch, args }),
+      confidence: 0.85,
+    };
+  }
+  if (decision === 'REQUIRE_APPROVAL') {
+    // Distribute REQUIRE_APPROVAL between sequence_anomaly / large_blast_radius
+    const t: SemanticType = rand() < 0.4 ? 'sequence_anomaly' : 'large_blast_radius_change';
+    return {
+      semantic_type: t,
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor(t, { tool, branch, args }),
+      confidence: 0.8,
+    };
+  }
+  if (decision === 'DENY') {
+    // Default DENY fallback — distribute between autonomous_merge / freeze
+    const t: SemanticType = rand() < 0.5 ? 'autonomous_merge_attempt' : 'freeze_window_violation';
+    return {
+      semantic_type: t,
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor(t, { tool, branch, args, freezeLabel: 'Release Fridays 18:00 IST → Mon 09:00 IST' }),
+      confidence: 0.7,
+    };
+  }
+  if (decision === 'REWRITE') {
+    return {
+      semantic_type: 'protected_branch_write',
+      blast_radius: 'high',
+      blast_radius_reason: blastRadiusReasonFor('protected_branch_write', { tool, branch, args }),
+      confidence: 1.0,
+    };
+  }
+  // Default ALLOW path — working_commit (most common)
+  return {
+    semantic_type: isFeature ? 'working_commit' : 'working_commit',
+    blast_radius: 'low',
+    blast_radius_reason: blastRadiusReasonFor('working_commit', { tool, branch, args }),
+    confidence: 0.95,
+  };
+}
+
+// Local WRITE_TOOLS set — needed BEFORE the larger WRITE_TOOLS export
+// below because the classifier runs during makeRun() which is called
+// before that export. Keep both in sync.
+const WRITE_TOOLS_RAW = new Set<string>([
+  'push_files',
+  'create_or_update_file',
+  'create_branch',
+  'create_pull_request',
+  'create_issue',
+  'merge_pull_request',
+  'post_message',
+  'post_thread_reply',
+  'upload_file',
+  'invite_user_to_channel',
+  'add_reaction',
+  'update_issue',
+  'add_issue_comment',
+  'add_comment',
+  'create_subtask',
+  'move_issue',
+  'assign_issue',
+  'set_priority',
+  'transition_issue',
+  'dispatch_workflow',
+  'rerun_workflow',
+  'cancel_workflow_run',
+  'terraform_apply',
+  'terraform_destroy',
+  'query_insert',
+  'query_update',
+  'query_delete',
+  'drop_table',
+  'truncate_table',
+  'run_migration',
+  'alter_table',
+  'archive_channel',
+  'delete_message',
+  'kick_user',
+]);
+
+/** Generate plausible context snapshots that JUSTIFY a given semantic_type.
+ *  The four context structs that Layer 2 assembles before classification —
+ *  in the demo we build them backwards from the semantic_type so the audit
+ *  trail is coherent. Reading the snapshots, you can see why the classifier
+ *  fired what it fired. */
+function generateContextSnapshots(
+  semantic_type: SemanticType,
+  ctx: {
+    sessionId: string;
+    agentName: string;
+    branch: string | null;
+    repo: string;
+    timestamp: string;
+    sequenceOrder: number;
+    delegationUser?: string;
+  },
+): {
+  session: SessionContextSnapshot;
+  repo: RepoContextSnapshot;
+  branch: BranchContextSnapshot;
+  env: EnvContextSnapshot;
+} {
+  const branch = ctx.branch ?? 'main';
+  const branchLc = branch.toLowerCase();
+  const isProtected = PROTECTED_BRANCHES.has(branchLc);
+  const isAegis = branchLc === 'aegis_workstation' || branchLc.startsWith('aegis/');
+
+  const session: SessionContextSnapshot = {
+    session_id: ctx.sessionId,
+    agent_name: ctx.agentName,
+    human_initiator: ctx.delegationUser ?? null,
+    started_at: ctx.timestamp,
+    push_count: semantic_type === 'sequence_anomaly' ? 6 + Math.floor(rand() * 4) : 1 + Math.floor(rand() * 4),
+    denial_count: semantic_type === 'sequence_anomaly' ? 3 + Math.floor(rand() * 2) : Math.floor(rand() * 2),
+    ci_failure_streak: semantic_type === 'sequence_anomaly' ? 3 + Math.floor(rand() * 2) : 0,
+    sequence_order: ctx.sequenceOrder,
+    linked_ticket: rand() < 0.6 ? pick(['AEGIS-247', 'AEGIS-301', 'AEGIS-419', 'PROD-88', 'PROD-122']) : null,
+    workflow_stage: pick(['planning', 'coding', 'review', 'deploy', 'incident']) as SessionContextSnapshot['workflow_stage'],
+    active_approval_count: semantic_type === 'large_blast_radius_change' || semantic_type === 'sensitive_path_change' ? 1 : 0,
+    last_action_type: 'push_commit',
+  };
+
+  const repo: RepoContextSnapshot = {
+    repo_id: ctx.repo,
+    owner: ctx.repo.split('/')[0] ?? 'aegis',
+    target_branch: branch,
+    is_protected_branch: isProtected,
+    protected_branches: ['main', 'master', 'release'],
+    ci_passing: semantic_type === 'freeze_window_violation' || semantic_type === 'sequence_anomaly' || semantic_type === 'autonomous_merge_attempt'
+      ? false
+      : true,
+    ci_failure_reason: semantic_type === 'sequence_anomaly'
+      ? 'auth.spec.ts failing — TypeError: Cannot read property `sub` of undefined'
+      : semantic_type === 'freeze_window_violation'
+        ? 'integration-deploy.yml failed 2h 14m ago (timeout)'
+        : null,
+    freeze_window_active: semantic_type === 'freeze_window_violation',
+    freeze_window_label: semantic_type === 'freeze_window_violation' ? 'Release Fridays 18:00 IST → Mon 09:00 IST' : null,
+    freeze_window_expires: semantic_type === 'freeze_window_violation'
+      ? new Date(Date.parse(ctx.timestamp) + 38 * 60 * 60 * 1000).toISOString()
+      : null,
+    open_pr_count: Math.floor(rand() * 4),
+    last_deployment_at: new Date(Date.parse(ctx.timestamp) - (2 + Math.random() * 48) * 60 * 60 * 1000).toISOString(),
+    sensitivity_level: semantic_type === 'sensitive_path_change' ? 'critical' : isProtected ? 'elevated' : 'standard',
+  };
+
+  const branchSnap: BranchContextSnapshot = {
+    branch_name: branch,
+    is_aegis_managed: isAegis,
+    session_owner_match: isAegis ? true : rand() < 0.6,
+    has_open_pr: semantic_type === 'protected_branch_write' ? false : rand() < 0.4,
+    pr_number: rand() < 0.4 ? 200 + Math.floor(rand() * 800) : null,
+    pr_reviewers: rand() < 0.5 ? ['kartik', 'jenil'] : [],
+    branch_age_seconds: isAegis ? Math.floor(rand() * 60 * 60 * 4) : Math.floor(rand() * 60 * 60 * 24 * 14),
+    commit_count_this_session: 1 + Math.floor(rand() * 8),
+    last_pushed_by: ctx.delegationUser ?? ctx.agentName,
+  };
+
+  const env: EnvContextSnapshot = {
+    environment_tier: isProtected ? 'production' : pick(['dev', 'staging', 'production']) as EnvContextSnapshot['environment_tier'],
+    active_incident: semantic_type === 'sensitive_path_change' || semantic_type === 'freeze_window_violation' ? rand() < 0.4 : rand() < 0.05,
+    incident_id: null,
+    incident_severity: null,
+    within_business_hours: !(semantic_type === 'freeze_window_violation'),
+    timezone: 'Asia/Kolkata',
+    deploy_locked: semantic_type === 'freeze_window_violation',
+  };
+
+  return { session, repo, branch: branchSnap, env };
+}
+
 // ── Agent delegation chain ───────────────────────────────────────────────
 // Real-world Aegis records who-on-whose-behalf for every action. We mock
 // a set of plausible humans with role mixes; each run gets stably
@@ -1206,19 +1729,86 @@ function makeRun(seq: number): SessionAction {
   const repo = pick(REPOS);
   const branch = pick(BRANCHES);
   const decision = pickW(DECISIONS);
-  const blast = blastRadiusForDecision(decision);
-  const cil = maybeAnomalyFor(tool, decision, blast);
+  const args = argsForTool(tool, repo, branch);
   const del = DELEGATION_BY_SESSION_ID.get(sessionId);
+
+  // ── Layer 2 (CIL / Semantic Classifier) — canonical pipeline ──────
+  // Run the demo classifier on (tool, decision, branch, args). The
+  // semantic_type is the primary CIL output; blast_radius and
+  // blast_radius_reason follow from it. Decision stays whatever the
+  // weighted picker produced, except for cases where the classifier
+  // forces consistency (e.g. branch=aegis_workstation must ALLOW).
+  const cilResult = classifyForDemo(tool, decision, branch, args);
+
+  // Enforce canonical decision mapping for the high-signal cases so
+  // the demo's reasoning trace stays internally consistent:
+  // - ephemeral_force_push → ALLOW
+  // - protected_branch_write → REWRITE
+  // - credential_exposure → DENY
+  // - freeze_window_violation → DENY
+  // - autonomous_merge_attempt → DENY
+  let finalDecision = decision;
+  if (
+    cilResult.semantic_type === 'ephemeral_force_push' ||
+    cilResult.semantic_type === 'test_only_change' ||
+    cilResult.semantic_type === 'working_commit'
+  ) {
+    finalDecision = 'ALLOW';
+  } else if (cilResult.semantic_type === 'protected_branch_write') {
+    finalDecision = 'REWRITE';
+  } else if (
+    cilResult.semantic_type === 'credential_exposure' ||
+    cilResult.semantic_type === 'freeze_window_violation' ||
+    cilResult.semantic_type === 'autonomous_merge_attempt'
+  ) {
+    finalDecision = 'DENY';
+  } else if (
+    cilResult.semantic_type === 'sensitive_path_change' ||
+    cilResult.semantic_type === 'large_blast_radius_change' ||
+    cilResult.semantic_type === 'sequence_anomaly'
+  ) {
+    finalDecision = 'REQUIRE_APPROVAL';
+  }
+
+  const blast = cilResult.blast_radius;
+  // Legacy behavioral-amplifier signal — still useful as a Series-A
+  // overlay on top of the canonical classifier. ~12% of actions
+  // also fire a behavioral anomaly (statistical baseline drift).
+  const cilLegacy = maybeAnomalyFor(tool, finalDecision, blast);
+
+  // Generate the four context snapshots that JUSTIFY the semantic_type.
+  // The Approval detail page renders these as the reasoning trace.
+  const snapshots = generateContextSnapshots(cilResult.semantic_type, {
+    sessionId,
+    agentName: agent,
+    branch,
+    repo,
+    timestamp,
+    sequenceOrder: seq,
+    delegationUser: del?.user,
+  });
+
+  // REWRITE-specific fields. When the classifier returns
+  // protected_branch_write, Aegis auto-creates a feature branch and
+  // opens a PR. Synthesize plausible URLs for the demo.
+  const isRewrite = cilResult.semantic_type === 'protected_branch_write';
+  const rewritePrNumber = isRewrite ? 200 + Math.floor(rand() * 800) : null;
+  const rewriteTargetBranch = isRewrite
+    ? `feature/aegis-rewrite-${seq.toString().padStart(4, '0')}`
+    : null;
+  const rewritePrUrl = isRewrite
+    ? `https://github.com/${repo}/pull/${rewritePrNumber}`
+    : null;
 
   return {
     id: uuid(),
     session_id: sessionId,
     agent_name: agent,
     tool_name: tool,
-    arguments: argsForTool(tool, repo, branch),
+    arguments: args,
     action_summary: phraseForTool(tool),
-    result: decision,
-    decision,
+    result: finalDecision,
+    decision: finalDecision,
     target_repo: repo,
     target_branch: branch,
     sequence_order: seq,
@@ -1228,12 +1818,26 @@ function makeRun(seq: number): SessionAction {
     // Risk signal — correlated with decision so demo mode shows the same
     // patterns prospects would see in a real workspace. PolicyChip +
     // BlastRadiusChip read these on the Runs / Sessions / Room Logs pages.
-    policy: policyForDecision(decision),
+    policy: policyForDecision(finalDecision),
     blast_redius: blast,
-    // ── CIL signals ────────────────────────────────────────────────
-    risk_score: riskScoreFor(decision, blast),
-    anomaly: cil.anomaly,
-    anomaly_reason: cil.anomaly_reason,
+    blast_radius: blast,
+    // ── Behavioral amplifier (Series-A roadmap) ─────────────────────
+    risk_score: riskScoreFor(finalDecision, blast),
+    anomaly: cilLegacy.anomaly,
+    anomaly_reason: cilLegacy.anomaly_reason,
+    // ── Canonical Layer 2 outputs (primary CIL signals) ─────────────
+    semantic_type: cilResult.semantic_type,
+    blast_radius_reason: cilResult.blast_radius_reason,
+    classifier_confidence: cilResult.confidence,
+    canonical_action_type: CANONICAL_ACTION_TYPE[tool] ?? tool,
+    session_context_snapshot: snapshots.session,
+    repo_context_snapshot: snapshots.repo,
+    branch_context_snapshot: snapshots.branch,
+    env_context_snapshot: snapshots.env,
+    // REWRITE-specific
+    rewrite_target_branch: rewriteTargetBranch,
+    rewrite_pr_number: rewritePrNumber,
+    rewrite_pr_url: rewritePrUrl,
     // Agent delegation chain — "Acting as <user> · <role> · <scope>"
     delegation: del
       ? {
@@ -1270,6 +1874,14 @@ function aggregateSessions(runs: SessionAction[]): Session[] {
         approvals: 0,
         connectors: [],
         has_anomaly: false,
+        // Trigger taxonomy — preset by archetype, overridden to `test`
+        // for ~1-in-4 sessions by `TRIGGER_BY_SESSION_ID`. Default to
+        // 'chat' for unmapped sessions so legacy data still renders.
+        trigger_type: TRIGGER_BY_SESSION_ID.get(sid) ?? 'chat',
+        // Canonical Layer 2 signals at session level. Collect unique
+        // semantic_types this session produced + flag REWRITE.
+        semantic_types: [],
+        has_rewrite: false,
       });
     }
     const s = map.get(sid)!;
@@ -1287,6 +1899,13 @@ function aggregateSessions(runs: SessionAction[]): Session[] {
     if (!connectors.includes(cn)) connectors.push(cn);
     s.connectors = connectors;
     if (r.anomaly) s.has_anomaly = true;
+    // Track unique semantic_types + has_rewrite for the session row.
+    if (r.semantic_type) {
+      const sts = (s.semantic_types as SemanticType[]) ?? [];
+      if (!sts.includes(r.semantic_type)) sts.push(r.semantic_type);
+      s.semantic_types = sts;
+    }
+    if (r.decision === 'REWRITE') s.has_rewrite = true;
     const d = r.decision?.toUpperCase() || '';
     if (d === 'ALLOW') s.allows = Number(s.allows) + 1;
     else if (d === 'DENY') s.denies = Number(s.denies) + 1;
@@ -1301,32 +1920,39 @@ function aggregateSessions(runs: SessionAction[]): Session[] {
 const SESSIONS: Session[] = aggregateSessions(RUNS);
 
 // Approvals
-const APPROVALS: MCPApproval[] = Array.from({ length: 11 }, (_, i) => {
+// APPROVALS are derived directly from REQUIRE_APPROVAL runs so the
+// Approval detail page can locate the source SessionAction (with its
+// full canonical CIL context: semantic_type + blast_radius_reason +
+// 4 context snapshots). Previously approvals were independently
+// generated, which broke the matchingRun lookup and hid the moat
+// evidence. Now: each approval is tied to a real run.
+const _approvalSourceRuns = RUNS.filter(
+  (r) => r.decision === 'REQUIRE_APPROVAL',
+).slice(0, 11);
+
+const APPROVALS: MCPApproval[] = _approvalSourceRuns.map((run, i) => {
   const status = pickW(APPROVAL_STATUSES);
-  const ageHours = rand() * 72;
-  const created_at = new Date(NOW - ageHours * 60 * 60 * 1000).toISOString();
   const approved_at =
     status === 'pending'
       ? null
-      : new Date(NOW - ageHours * 60 * 60 * 1000 + rand() * 60 * 60 * 1000).toISOString();
-  const agent = pick(AGENTS);
-  const repo = pick(REPOS);
-  const branch = pick(BRANCHES);
-  // Approval queue is biased toward write/destructive actions (the only
-  // calls that trip REQUIRE_APPROVAL). Pull weighted across GitHub +
-  // Slack so both connectors surface in pending-approval state.
-  const tool = pickToolWeighted();
+      : new Date(
+          Date.parse(run.timestamp) + rand() * 60 * 60 * 1000,
+        ).toISOString();
   return {
     id: `apv_${i}_${uuid()}`,
     user_id: 'preview-user',
-    tool_name: tool,
-    arguments: argsForTool(tool, repo, branch),
+    tool_name: run.tool_name,
+    arguments: run.arguments,
     status,
-    created_at,
+    created_at: run.timestamp,
     approved_at,
     result: null,
-    context: { user: agent, conversation_id: `conv_${uuid().slice(0, 6)}`, model: agent },
-    action_summary: phraseForTool(tool),
+    context: {
+      user: run.agent_name,
+      conversation_id: `conv_${uuid().slice(0, 6)}`,
+      model: run.agent_name,
+    },
+    action_summary: run.action_summary,
   };
 }).sort(
   (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -1438,33 +2064,91 @@ function makeRoomAction(
   const decision = pickW(DECISIONS);
   const sessionId = pick(SESSION_IDS);
   const member = pick(members);
-  const blast = blastRadiusForDecision(decision);
-  const cil = maybeAnomalyFor(tool, decision, blast);
+  const args = argsForTool(tool, repo, branch);
+
+  // Run the canonical Layer 2 classifier (same as makeRun above).
+  const cilResult = classifyForDemo(tool, decision, branch, args);
+
+  // Force consistent decision per canonical mapping.
+  let finalDecision = decision;
+  if (
+    cilResult.semantic_type === 'ephemeral_force_push' ||
+    cilResult.semantic_type === 'test_only_change' ||
+    cilResult.semantic_type === 'working_commit'
+  ) {
+    finalDecision = 'ALLOW';
+  } else if (cilResult.semantic_type === 'protected_branch_write') {
+    finalDecision = 'REWRITE';
+  } else if (
+    cilResult.semantic_type === 'credential_exposure' ||
+    cilResult.semantic_type === 'freeze_window_violation' ||
+    cilResult.semantic_type === 'autonomous_merge_attempt'
+  ) {
+    finalDecision = 'DENY';
+  } else if (
+    cilResult.semantic_type === 'sensitive_path_change' ||
+    cilResult.semantic_type === 'large_blast_radius_change' ||
+    cilResult.semantic_type === 'sequence_anomaly'
+  ) {
+    finalDecision = 'REQUIRE_APPROVAL';
+  }
+
+  const blast = cilResult.blast_radius;
+  const cilLegacy = maybeAnomalyFor(tool, finalDecision, blast);
+  const snapshots = generateContextSnapshots(cilResult.semantic_type, {
+    sessionId,
+    agentName: agent,
+    branch,
+    repo,
+    timestamp,
+    sequenceOrder: seq,
+    delegationUser: member.username,
+  });
+
+  const isRewrite = cilResult.semantic_type === 'protected_branch_write';
+  const rewritePrNumber = isRewrite ? 200 + Math.floor(rand() * 800) : null;
+  const rewriteTargetBranch = isRewrite
+    ? `feature/aegis-rewrite-${seq.toString().padStart(4, '0')}`
+    : null;
+  const rewritePrUrl = isRewrite
+    ? `https://github.com/${repo}/pull/${rewritePrNumber}`
+    : null;
 
   return {
     id: uuid(),
     session_id: sessionId,
     agent_name: agent,
     tool_name: tool,
-    arguments: argsForTool(tool, repo, branch),
+    arguments: args,
     action_summary: phraseForTool(tool),
-    result: decision,
-    decision,
+    result: finalDecision,
+    decision: finalDecision,
     target_repo: repo,
     target_branch: branch,
     sequence_order: seq,
     timestamp,
     user_id: member.user_id ?? member.username ?? 'preview-user',
     execution_time: Math.floor(80 + rand() * rand() * 6500),
-    policy: policyForDecision(decision),
+    policy: policyForDecision(finalDecision),
     blast_redius: blast,
-    risk_score: riskScoreFor(decision, blast),
-    anomaly: cil.anomaly,
-    anomaly_reason: cil.anomaly_reason,
+    blast_radius: blast,
+    risk_score: riskScoreFor(finalDecision, blast),
+    anomaly: cilLegacy.anomaly,
+    anomaly_reason: cilLegacy.anomaly_reason,
+    // Canonical Layer 2 outputs
+    semantic_type: cilResult.semantic_type,
+    blast_radius_reason: cilResult.blast_radius_reason,
+    classifier_confidence: cilResult.confidence,
+    canonical_action_type: CANONICAL_ACTION_TYPE[tool] ?? tool,
+    session_context_snapshot: snapshots.session,
+    repo_context_snapshot: snapshots.repo,
+    branch_context_snapshot: snapshots.branch,
+    env_context_snapshot: snapshots.env,
+    rewrite_target_branch: rewriteTargetBranch,
+    rewrite_pr_number: rewritePrNumber,
+    rewrite_pr_url: rewritePrUrl,
     // Room actions get their delegation from the room member that the
-    // action was attributed to — closer to real-world data (the room
-    // already records the member). The role comes from PREVIEW_ROOM_TOOLS
-    // role mapping via member.role; expiry is a synthetic 4–8h window.
+    // action was attributed to.
     delegation: {
       user: member.username || 'unknown',
       role: (member.role as string) || 'DEVELOPER',
@@ -1735,6 +2419,16 @@ export function installPreviewApi() {
         total_execution_time: execTimes.reduce((a, b) => a + b, 0),
         tools_used: tools,
         sessions: sessionRuns,
+        // Connector journey + CIL anomaly flag travel up from the
+        // session aggregate so the Sessions table row already has
+        // them without re-deriving from `sessions[]`.
+        connectors: s.connectors,
+        has_anomaly: s.has_anomaly,
+        // Trigger taxonomy — needed for the Sessions tab strip.
+        trigger_type: s.trigger_type,
+        // Canonical Layer 2 signals at session level.
+        semantic_types: s.semantic_types,
+        has_rewrite: s.has_rewrite,
       };
     });
     const start = (page - 1) * page_size;

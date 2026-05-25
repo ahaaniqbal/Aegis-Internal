@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Clock,
   Gauge,
+  GitMerge as GitMergeIcon,
   History,
   Inbox,
   Shield,
@@ -20,6 +21,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { api } from '@/lib/api';
 import { useAutoRefresh, useUser } from '@/lib/hooks';
 import { MCPApproval, Metrics, SessionAction } from '@/lib/types';
@@ -146,11 +148,20 @@ export default function DashboardHomePage() {
       : 10;
 
     // ── CIL + outcomes signals ─────────────────────────────────────
-    // CIL anomalies surfaced this week — the moat metric. Counts
-    // runs that the Contextual Intelligence Layer flagged as
-    // behavioral outliers. Demos as "what static policies would have
-    // missed."
-    const anomaliesThisWeek = runsThisWeek.filter((r) => r.anomaly).length;
+    // CIL classifications this week — the moat metric. Counts every
+    // action where the Layer 2 semantic classifier returned a non-ALLOW
+    // semantic_type (REWRITE / DENY / REQUIRE_APPROVAL). Demos as
+    // "what static rules without context would have missed."
+    const cilEventsThisWeek = runsThisWeek.filter(
+      (r) =>
+        r.semantic_type &&
+        r.semantic_type !== 'working_commit' &&
+        r.semantic_type !== 'test_only_change' &&
+        r.semantic_type !== 'ephemeral_force_push',
+    ).length;
+    // Keep the legacy behavioral-anomaly count too — it's a secondary
+    // amplifier signal (Series-A roadmap), not the canonical moat.
+    const behavioralAnomaliesThisWeek = runsThisWeek.filter((r) => r.anomaly).length;
     // Risky actions prevented = DENY + REQUIRE_APPROVAL routed for
     // review. The aggregate "what Aegis blocked from doing damage."
     const approvalsThisWeek = runsThisWeek.filter(
@@ -181,7 +192,8 @@ export default function DashboardHomePage() {
       blockedThisWeek,
       rewritesThisWeek,
       // CIL + outcomes
-      anomaliesThisWeek,
+      cilEventsThisWeek,
+      behavioralAnomaliesThisWeek,
       preventedThisWeek,
       toolsGovernedThisWeek,
     };
@@ -198,15 +210,43 @@ export default function DashboardHomePage() {
   const recentRuns = useMemo(() => runs.slice(0, 8), [runs]);
 
   /**
-   * CIL anomaly callout — top N most-recent runs flagged by the
-   * Contextual Intelligence Layer. The dashboard hero proves "we have
-   * intelligence"; this list proves "and here's what it caught."
-   * Empty state is allowed and reads as a positive: "Baselines healthy."
+   * CIL events callout — top N most-recent runs where the Layer 2
+   * semantic classifier returned a non-ALLOW semantic_type. These
+   * are the canonical moat moments: every row is a verdict the
+   * classifier made because the agent's action plus its real-time
+   * context fired a specific rule.
+   *
+   * The dashboard hero proves "we govern AI agents"; this list proves
+   * "and here's exactly what we caught and why."
    */
-  const anomalousRuns = useMemo(
-    () => runs.filter((r) => r.anomaly).slice(0, 4),
+  const cilEvents = useMemo(
+    () =>
+      runs
+        .filter(
+          (r) =>
+            r.semantic_type &&
+            r.semantic_type !== 'working_commit' &&
+            r.semantic_type !== 'test_only_change' &&
+            r.semantic_type !== 'ephemeral_force_push',
+        )
+        .slice(0, 5),
     [runs],
   );
+
+  /**
+   * REWRITE highlights — the canonical example for the dashboard hero
+   * card. We want at least one recent REWRITE action visible so the
+   * single most differentiating decision type is on screen at first
+   * paint. Falls back to the most recent protected-branch action even
+   * if it wasn't decisioned as REWRITE.
+   */
+  const recentRewrite = useMemo(() => {
+    return (
+      runs.find(
+        (r) => r.decision === 'REWRITE' && r.semantic_type === 'protected_branch_write',
+      ) ?? runs.find((r) => r.decision === 'REWRITE') ?? null
+    );
+  }, [runs]);
 
   const username = user?.username || 'there';
 
@@ -360,15 +400,15 @@ export default function DashboardHomePage() {
             }
           />
           <OutcomeTile
-            label="CIL anomalies surfaced"
-            value={stats.anomaliesThisWeek}
+            label="CIL classifications"
+            value={stats.cilEventsThisWeek}
             color="var(--warning)"
             icon={Sparkles}
-            href="/dashboard/runs?cil=anomalies"
+            href="/dashboard/insights"
             footnote={
-              stats.anomaliesThisWeek > 0
-                ? 'What static policies would have missed'
-                : 'No anomalies this week'
+              stats.cilEventsThisWeek > 0
+                ? `${stats.rewritesThisWeek} REWRITE · ${stats.blockedThisWeek} DENY · ${stats.cilEventsThisWeek - stats.rewritesThisWeek - stats.blockedThisWeek} APPROVAL`
+                : 'No classified events this week'
             }
           />
           <OutcomeTile
@@ -393,15 +433,172 @@ export default function DashboardHomePage() {
           />
         </motion.section>
 
-        {/* ─── CIL anomaly callout ──────────────────────────────────────
-            The moat slide made concrete. Lists the most recent
-            behavioral-baseline anomalies the Contextual Intelligence
-            Layer flagged — each with the connector mark, the tool that
-            tripped it, and a one-line reason. Each row links into
-            Runs so a reviewer can drill in.
+        {/* ─── REWRITE in action — the differentiator ─────────────────
+            Light card matching the rest of the dashboard chrome. The
+            "audit-inspector" feel comes from the typography (mono
+            key=value trace), not from inverting the surface. Brand
+            orange used only for the classification step (the moat
+            moment); error red on the unsafe target; success green on
+            the resulting PR. Mobile: grid-cols-[24px_1fr] gutter stays
+            tight; mono strings break-all to prevent overflow. */}
+        {recentRewrite && (
+          <motion.section
+            className="relative mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-[var(--white-0)] shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: DUR.slow, ease: EASE.out, delay: 0.18 }}
+          >
+            {/* Inset orange wash — same family as the CIL callout below,
+                anchors this card as part of the "moat" hero row. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-1 rounded-[8px]"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(250, 115, 25, 0.07) 0%, rgba(250, 115, 25, 0.03) 28%, rgba(255, 255, 255, 0) 60%)',
+              }}
+            />
+            <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-[var(--stroke-soft-200)] px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-2.5">
+                <IconMark icon={GitMergeIcon} color="var(--primary-base)" strokeWidth={2.25} />
+                <div>
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
+                    REWRITE · the differentiator
+                  </p>
+                  <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
+                    {stats.rewritesThisWeek > 0
+                      ? `${stats.rewritesThisWeek.toLocaleString()} unsafe ${stats.rewritesThisWeek === 1 ? 'action' : 'actions'} transformed into safe PR ${stats.rewritesThisWeek === 1 ? 'workflow' : 'workflows'} this week`
+                      : 'No REWRITE moments yet this week'}
+                  </h2>
+                </div>
+              </div>
+              <Link
+                href={recentRewrite.rewrite_pr_url ?? `/dashboard/runs?session=${recentRewrite.session_id}`}
+                target={recentRewrite.rewrite_pr_url ? '_blank' : undefined}
+                rel={recentRewrite.rewrite_pr_url ? 'noopener noreferrer' : undefined}
+                className="group inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] transition-colors hover:text-[var(--primary-base)]"
+              >
+                {recentRewrite.rewrite_pr_url ? 'Open PR' : 'View run'}
+                <ArrowUpRight
+                  className="h-3 w-3 transition-transform group-hover:-translate-y-px group-hover:translate-x-px"
+                  strokeWidth={2}
+                />
+              </Link>
+            </div>
 
-            Empty state is a positive: "Baselines healthy" reads as
-            "your fleet is calm" not "nothing's working." */}
+            {/* Request trace — three sequential log lines on the light
+                surface. Each row: ordinal gutter + mono key/value
+                payload + plain-English description below. */}
+            <ol className="relative divide-y divide-[var(--stroke-soft-200)]">
+              {/* 01 — Agent intent */}
+              <li className="grid grid-cols-[22px_1fr] gap-x-3 px-4 py-3.5 sm:grid-cols-[28px_1fr] sm:px-5">
+                <span
+                  aria-hidden
+                  className="mt-px font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]"
+                >
+                  01
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--error)]">
+                    agent_intent
+                  </p>
+                  <p className="mt-1.5 break-all font-mono text-[12px] leading-[1.55] text-[var(--neutral-strong-950)]">
+                    <span className="text-[var(--neutral-soft-400)]">{recentRewrite.agent_name}</span>
+                    <span className="text-[var(--stroke-sub-300)]"> · </span>
+                    <span className="font-semibold">{recentRewrite.tool_name}</span>
+                    <span className="text-[var(--stroke-sub-300)]"> → </span>
+                    <span className="font-semibold text-[var(--error)]">{recentRewrite.target_branch ?? 'main'}</span>
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                    Direct push to a protected branch. Without context-aware governance, this would land on main.
+                  </p>
+                </div>
+              </li>
+
+              {/* 02 — Classification + REWRITE (the moat) */}
+              <li className="grid grid-cols-[22px_1fr] gap-x-3 px-4 py-3.5 sm:grid-cols-[28px_1fr] sm:px-5">
+                <span
+                  aria-hidden
+                  className="mt-px font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--primary-base)]"
+                >
+                  02
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--primary-dark)]">
+                    aegis_classify · rewrite
+                  </p>
+                  <p className="mt-1.5 break-all font-mono text-[12px] leading-[1.55] text-[var(--neutral-strong-950)]">
+                    <span className="text-[var(--neutral-soft-400)]">semantic_type</span>
+                    <span className="text-[var(--stroke-sub-300)]"> = </span>
+                    <span className="font-semibold text-[var(--primary-dark)]">protected_branch_write</span>
+                    <span className="text-[var(--stroke-sub-300)]"> → </span>
+                    <span className="font-semibold">
+                      {recentRewrite.rewrite_target_branch ?? 'feature/aegis-rewrite'}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                    Layer 2 classifier identified the protected-branch write. Aegis spawned a safe feature branch from the working tree and opened a PR to{' '}
+                    <span className="font-mono text-[11px] text-[var(--neutral-strong-950)]">{recentRewrite.target_branch ?? 'main'}</span>{' '}
+                    automatically.
+                  </p>
+                </div>
+              </li>
+
+              {/* 03 — Safe outcome */}
+              <li className="grid grid-cols-[22px_1fr] gap-x-3 px-4 py-3.5 sm:grid-cols-[28px_1fr] sm:px-5">
+                <span
+                  aria-hidden
+                  className="mt-px font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--neutral-soft-400)]"
+                >
+                  03
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--success)]">
+                    safe_outcome
+                  </p>
+                  <p className="mt-1.5 break-all font-mono text-[12px] leading-[1.55] text-[var(--neutral-strong-950)]">
+                    <span className="text-[var(--neutral-soft-400)]">pull_request</span>
+                    <span className="text-[var(--stroke-sub-300)]"> = </span>
+                    <span className="font-semibold text-[var(--success)]">
+                      #{recentRewrite.rewrite_pr_number ?? '—'} opened
+                    </span>
+                    <span className="text-[var(--stroke-sub-300)]"> · </span>
+                    <span className="text-[var(--neutral-sub-600)]">agent_continued = true</span>
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                    Agent received the PR URL and kept working. No human required. The action happened, just safely.
+                  </p>
+                </div>
+              </li>
+            </ol>
+
+            {/* Footer — decision path summary as a single mono line. */}
+            <div className="border-t border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] px-4 py-2.5 sm:px-5">
+              <p className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 font-mono text-[10.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
+                <span className="font-bold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">decision_path</span>
+                <span className="text-[var(--stroke-sub-300)]">|</span>
+                <span>tool_call</span>
+                <span className="text-[var(--stroke-sub-300)]">→</span>
+                <span>classify(session,repo,branch,env)</span>
+                <span className="text-[var(--stroke-sub-300)]">→</span>
+                <span className="font-semibold text-[var(--primary-dark)]">protected_branch_write</span>
+                <span className="text-[var(--stroke-sub-300)]">→</span>
+                <span className="font-semibold text-[var(--primary-base)]">REWRITE</span>
+              </p>
+            </div>
+          </motion.section>
+        )}
+
+        {/* ─── CIL events callout ──────────────────────────────────────
+            The moat made concrete. Lists the most recent non-ALLOW
+            semantic_types the Layer 2 classifier produced — each with
+            the connector mark, the canonical semantic_type chip, and
+            the blast_radius_reason the classifier emitted. Each row
+            links into Runs so a reviewer can drill into the full
+            reasoning trace.
+
+            Empty state reads as a positive: "Classifier quiet" means
+            every action this week was a routine ALLOW. */}
         <motion.section
           className="relative mb-6 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
           initial={reduce ? false : { opacity: 0, y: 8 }}
@@ -430,35 +627,29 @@ export default function DashboardHomePage() {
               <IconMark
                 icon={Sparkles}
                 color={
-                  anomalousRuns.length > 0
+                  cilEvents.length > 0
                     ? 'var(--warning)'
                     : 'var(--neutral-soft-400)'
                 }
               />
               <div>
                 <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--neutral-soft-400)]">
-                  Contextual Intelligence
+                  Contextual Intelligence · Layer 2
                 </p>
                 <h2 className="mt-0.5 text-[14px] font-semibold tracking-[-0.01em] text-[var(--neutral-strong-950)]">
-                  {anomalousRuns.length > 0
-                    ? `${stats.anomaliesThisWeek} ${stats.anomaliesThisWeek === 1 ? 'anomaly' : 'anomalies'} surfaced this week`
-                    : 'Baselines healthy'}
+                  {cilEvents.length > 0
+                    ? `${stats.cilEventsThisWeek} context-driven ${stats.cilEventsThisWeek === 1 ? 'classification' : 'classifications'} this week`
+                    : 'Classifier quiet · all actions routine ALLOW'}
                 </h2>
               </div>
             </div>
-            {/* Deep-link header CTA — when anomalies are present, route
-                straight to the filtered Runs view so the reviewer sees
-                the same subset the callout is showing, not the full
-                table mixed with non-anomalous rows. */}
+            {/* Deep-link header CTA — route to the CIL Insights page
+                for the full distribution + canonical example. */}
             <Link
-              href={
-                anomalousRuns.length > 0
-                  ? '/dashboard/runs?cil=anomalies'
-                  : '/dashboard/runs'
-              }
+              href="/dashboard/insights"
               className="group inline-flex items-center gap-1 text-[12px] font-medium text-[var(--neutral-sub-600)] transition-colors hover:text-[var(--primary-base)]"
             >
-              {anomalousRuns.length > 0 ? 'View all flagged' : 'View all runs'}
+              {cilEvents.length > 0 ? 'View full distribution' : 'View CIL insights'}
               <ArrowUpRight
                 className="h-3 w-3 transition-transform group-hover:-translate-y-px group-hover:translate-x-px"
                 strokeWidth={2}
@@ -466,18 +657,20 @@ export default function DashboardHomePage() {
             </Link>
           </div>
 
-          {anomalousRuns.length > 0 ? (
+          {cilEvents.length > 0 ? (
             <ul className="relative divide-y divide-[var(--stroke-soft-200)]">
-              {anomalousRuns.map((run) => (
+              {cilEvents.map((run) => (
                 <AnomalyListItem key={run.id} run={run} />
               ))}
             </ul>
           ) : (
             <div className="relative px-5 py-6">
               <p className="text-[12.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
-                CIL hasn&apos;t detected any behavioral outliers in the last 7 days.
-                Each agent in this workspace is operating within its baseline
-                tool, file, and timing distribution. We&apos;re still watching.
+                The Layer 2 semantic classifier saw every agent action this week
+                land as a routine ALLOW (working_commit, test_only_change, or
+                ephemeral_force_push). No protected-branch writes, no freeze-window
+                violations, no credential exposure, no sensitive-path changes. The
+                classifier is still watching every call.
               </p>
             </div>
           )}
@@ -1054,30 +1247,28 @@ function SectionIcon({ icon: Icon }: { icon: LucideIcon }) {
 }
 
 /**
- * AnomalyListItem — one row in the dashboard's CIL anomaly callout.
+ * AnomalyListItem — one row in the dashboard's CIL events callout.
  *
- * Connector mark + tool name + agent + one-line reason + relative time.
- * Each row links to the Runs page; in a follow-up we can deep-link to
- * the specific run's expanded view once we add a URL-driven expansion.
+ * Renders the canonical semantic_type chip + the classifier's
+ * blast_radius_reason (the actual audit-line reasoning trace). Every
+ * row is a moment where the Layer 2 classifier produced a non-ALLOW
+ * verdict; clicking through deep-links into the Runs filtered view.
  */
 function AnomalyListItem({ run }: { run: SessionAction }) {
   const connector = getConnectorForTool(run.tool_name);
+  const reasoning = run.blast_radius_reason ?? run.anomaly_reason;
   return (
     <li>
-      {/* Deep-link the anomaly row into the filtered Runs view so the
-          reviewer lands on a table already constrained to CIL-flagged
-          actions. Clicking through to an unfiltered /runs (the old
-          behaviour) lost the very context the user expressed. */}
       <Link
-        href="/dashboard/runs?cil=anomalies"
+        href={
+          run.semantic_type
+            ? `/dashboard/runs?semantic_type=${run.semantic_type}`
+            : '/dashboard/runs'
+        }
         className="group block px-5 py-3 transition-colors duration-150 hover:bg-[var(--primary-lighter)]/40"
       >
         <div className="flex items-start gap-3">
-          {/* Canonical concentric IconMark — outer ring + inner sticker.
-              The connector logo (or AlertTriangle fallback for unmatched
-              tools) sits inside the inner sticker so the list item's
-              identity anchor reads at the same scale as the dashboard's
-              other IconMark surfaces. */}
+          {/* Canonical concentric IconMark — outer ring + inner sticker. */}
           <div
             aria-hidden
             className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center"
@@ -1096,18 +1287,25 @@ function AnomalyListItem({ run }: { run: SessionAction }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--warning-dark)]">
-                Anomaly
-              </span>
+              {run.semantic_type ? (
+                <SemanticTypeChip
+                  semantic_type={run.semantic_type}
+                  reason={reasoning ?? undefined}
+                />
+              ) : (
+                <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--warning-dark)]">
+                  CIL event
+                </span>
+              )}
               <span className="text-[11px] text-[var(--neutral-soft-400)]">
                 {run.agent_name}
               </span>
               <span className="text-[11px] text-[var(--neutral-soft-400)]">·</span>
               <CodeChip>{run.tool_name}</CodeChip>
             </div>
-            {run.anomaly_reason && (
+            {reasoning && (
               <p className="mt-1 text-[12.5px] leading-[1.45] text-[var(--neutral-strong-950)]">
-                {run.anomaly_reason}
+                {reasoning}
               </p>
             )}
             {run.target_repo && (
