@@ -27,6 +27,10 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  BarChart3,
+  ShieldCheck,
+  Store,
+  Server,
   type LucideIcon,
 } from 'lucide-react';
 import { useUser } from '@/lib/hooks';
@@ -108,6 +112,7 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { name: 'Runs', href: '/dashboard/runs', icon: Activity },
       { name: 'Sessions', href: '/dashboard/sessions', icon: Layers },
+      { name: 'MCP Servers', href: '/dashboard/mcp-servers', icon: Server },
       { name: 'Agents', href: '/dashboard/agents', icon: Bot },
       { name: 'Rooms', href: '/dashboard/rooms', icon: Users },
     ],
@@ -118,6 +123,8 @@ const NAV_GROUPS: NavGroup[] = [
       { name: 'Approvals', href: '/dashboard/approvals', icon: Bell },
       { name: 'Policies', href: '/dashboard/policies', icon: BookOpen },
       { name: 'Audit Trail', href: '/dashboard/audit', icon: FileText },
+      { name: 'Compliance', href: '/dashboard/compliance', icon: ShieldCheck },
+      { name: 'Marketplace', href: '/dashboard/marketplace', icon: Store, badge: { value: 'NEW', tone: 'neutral' } },
       { name: 'Freeze Windows', href: '/dashboard/freeze-window', icon: Clock },
       { name: 'Connectors', href: '/dashboard/connectors', icon: Boxes },
     ],
@@ -128,6 +135,7 @@ const NAV_GROUPS: NavGroup[] = [
       // CIL Insights sits at the top of Insights because it's the
       // moat surface. Token Expenditure (cost story) is secondary.
       { name: 'CIL Insights', href: '/dashboard/insights', icon: Sparkles },
+      { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
       // Simulation Mode (Shadow Mode) — the GTM wedge surface. New
       // teams land here first: install observe-only, see a Risk
       // Report after 7 days, then escalate to enforce.

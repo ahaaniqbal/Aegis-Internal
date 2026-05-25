@@ -34,6 +34,7 @@ interface KillSwitchState {
   disabledTools: string[];         // tool names
   blockAllWrites: boolean;
   blockAllProduction: boolean;
+  readOnlyMode: boolean;           // all writes blocked, reads unrestricted
   emergencyPauseAll: boolean;
 }
 
@@ -42,6 +43,7 @@ const EMPTY_STATE: KillSwitchState = {
   disabledTools: [],
   blockAllWrites: false,
   blockAllProduction: false,
+  readOnlyMode: false,
   emergencyPauseAll: false,
 };
 
@@ -109,6 +111,12 @@ export function KillSwitchBanner() {
     activeItems.push({
       label: 'Production-tier actions are blocked org-wide.',
       clear: () => setState({ ...state, blockAllProduction: false }),
+    });
+  }
+  if (state.readOnlyMode) {
+    activeItems.push({
+      label: 'Workspace is in read-only mode org-wide.',
+      clear: () => setState({ ...state, readOnlyMode: false }),
     });
   }
   if (state.pausedAgents.length > 0) {
@@ -196,6 +204,7 @@ type PendingDialog =
   | { kind: 'disable_tool'; tool: string }
   | { kind: 'block_writes' }
   | { kind: 'block_production' }
+  | { kind: 'read_only_mode' }
   | { kind: 'emergency_pause_all' }
   | null;
 
@@ -241,6 +250,14 @@ export function KillSwitchesSection() {
           description: state.blockAllProduction
             ? 'Production-tier writes resumed.'
             : 'Every action targeting production will be blocked.',
+        });
+        break;
+      case 'read_only_mode':
+        setState({ ...state, readOnlyMode: !state.readOnlyMode });
+        toast.success(state.readOnlyMode ? 'Read-only mode lifted' : 'Workspace in read-only mode', {
+          description: state.readOnlyMode
+            ? 'Writes are allowed again.'
+            : 'Every write action will be blocked org-wide. Reads still pass.',
         });
         break;
       case 'emergency_pause_all':
@@ -350,7 +367,19 @@ export function KillSwitchesSection() {
           />
         </SwitchRow>
 
-        {/* 5. Emergency pause all */}
+        {/* 5. Read-only mode org-wide */}
+        <SwitchRow
+          icon={Lock}
+          title="Enter read-only mode org-wide"
+          description="All writes blocked. Reads pass through unrestricted. Use when you need agents to keep gathering context without changing anything."
+        >
+          <Toggle
+            active={state.readOnlyMode}
+            onClick={() => setPending({ kind: 'read_only_mode' })}
+          />
+        </SwitchRow>
+
+        {/* 6. Emergency pause all */}
         <div
           className="px-5 py-4"
           style={{ backgroundColor: 'rgba(251, 55, 72, 0.04)' }}
@@ -398,6 +427,7 @@ function dialogTitle(p: PendingDialog, s: KillSwitchState): string {
     case 'disable_tool': return `Disable tool ${p.tool} org-wide?`;
     case 'block_writes': return s.blockAllWrites ? 'Lift the write block?' : 'Block ALL writes org-wide?';
     case 'block_production': return s.blockAllProduction ? 'Lift the production block?' : 'Block ALL production actions?';
+    case 'read_only_mode': return s.readOnlyMode ? 'Lift read-only mode?' : 'Enter read-only mode org-wide?';
     case 'emergency_pause_all': return s.emergencyPauseAll ? 'Lift the emergency pause?' : 'Pause EVERY agent now?';
   }
 }
@@ -409,6 +439,7 @@ function dialogDescription(p: PendingDialog, s: KillSwitchState): string {
     case 'disable_tool': return `Every agent loses access to ${p.tool} across every room until you re-enable it.`;
     case 'block_writes': return s.blockAllWrites ? 'Agents will be allowed to perform write actions again.' : 'Every write tool call will be denied org-wide. Reads still pass. Use during incidents.';
     case 'block_production': return s.blockAllProduction ? 'Production-tier actions resume.' : 'Every action targeting production environments will be denied. Staging and dev still pass.';
+    case 'read_only_mode': return s.readOnlyMode ? 'Writes resume across the workspace.' : 'Every write tool call denied org-wide. Reads still pass. Use when you need agents to keep observing.';
     case 'emergency_pause_all': return s.emergencyPauseAll ? 'All agents resume execution.' : 'Every agent, every tool, every room: blocked. Use only when something is actively going wrong.';
   }
 }
@@ -420,6 +451,7 @@ function dialogConfirm(p: PendingDialog, s: KillSwitchState): string {
     case 'disable_tool': return 'Disable tool';
     case 'block_writes': return s.blockAllWrites ? 'Lift block' : 'Block writes';
     case 'block_production': return s.blockAllProduction ? 'Lift block' : 'Block production';
+    case 'read_only_mode': return s.readOnlyMode ? 'Lift read-only' : 'Enter read-only';
     case 'emergency_pause_all': return s.emergencyPauseAll ? 'Lift pause' : 'Pause all agents';
   }
 }

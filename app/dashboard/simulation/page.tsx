@@ -46,21 +46,21 @@ import type { SemanticType } from '@/lib/types';
 const MOCK_REPORT = {
   windowStart: '2026-05-18T09:00:00.000Z',
   windowEnd: '2026-05-25T09:00:00.000Z',
-  actionsObserved: 247,
+  actionsObserved: 847,
   agentsActive: 11,
   toolsExercised: 23,
-  wouldHaveDenied: 17,
-  wouldHaveRequiredApproval: 45,
-  rewriteOpportunities: 8,
+  wouldHaveDenied: 23,
+  wouldHaveRequiredApproval: 67,
+  rewriteOpportunities: 14,
   semanticTypeBreakdown: [
-    // Sums must match the metric cards above. 8 REWRITE + 17 DENY + 45 APPROVAL = 70.
-    // Routine ALLOW makes up the remaining 177 actions (247 total - 70 policy hits).
-    { type: 'protected_branch_write' as SemanticType, count: 8, severity: 'REWRITE' as const },
-    { type: 'sensitive_path_change' as SemanticType, count: 18, severity: 'REQUIRE_APPROVAL' as const },
-    { type: 'large_blast_radius_change' as SemanticType, count: 22, severity: 'REQUIRE_APPROVAL' as const },
-    { type: 'sequence_anomaly' as SemanticType, count: 5, severity: 'REQUIRE_APPROVAL' as const },
-    { type: 'freeze_window_violation' as SemanticType, count: 7, severity: 'DENY' as const },
-    { type: 'credential_exposure' as SemanticType, count: 4, severity: 'DENY' as const },
+    // Sums match the metric cards above: 14 REWRITE + 67 APPROVAL + 23 DENY = 104.
+    // Routine ALLOW makes up the remaining 743 actions (847 - 104).
+    { type: 'protected_branch_write' as SemanticType, count: 14, severity: 'REWRITE' as const },
+    { type: 'sensitive_path_change' as SemanticType, count: 28, severity: 'REQUIRE_APPROVAL' as const },
+    { type: 'large_blast_radius_change' as SemanticType, count: 30, severity: 'REQUIRE_APPROVAL' as const },
+    { type: 'sequence_anomaly' as SemanticType, count: 9, severity: 'REQUIRE_APPROVAL' as const },
+    { type: 'freeze_window_violation' as SemanticType, count: 10, severity: 'DENY' as const },
+    { type: 'credential_exposure' as SemanticType, count: 7, severity: 'DENY' as const },
     { type: 'autonomous_merge_attempt' as SemanticType, count: 6, severity: 'DENY' as const },
   ],
   riskiestAgents: [

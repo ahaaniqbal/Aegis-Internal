@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import { KillSwitchBanner } from '@/components/dashboard/KillSwitches';
+import { DemoModeBanner } from '@/components/dashboard/DemoModeBanner';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -20,6 +21,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             switches are active (read from localStorage). Sits above
             the Topbar so it's visible on every dashboard route. */}
         <KillSwitchBanner />
+        {/* Demo mode banner — renders when aegis_demo=true AND the user
+            hasn't dismissed it. Renders below KillSwitchBanner so urgent
+            kill-switch state stays at the very top. */}
+        <DemoModeBanner />
         {children}
       </main>
     </div>

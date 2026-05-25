@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   AlertTriangle,
@@ -52,7 +53,7 @@ const policies: PolicyDef[] = [
   // ── GitHub-scoped (the original 10) ────────────────────────────────
   { key: 'protected_branch_denial', name: 'Protected Branch Denial', decision: 'REWRITE',          description: 'Direct writes to main, master, and release branches are redirected to a safe PR workflow.', icon: GitBranch,     category: 'governance', connector: 'github' },
   { key: 'freeze_window_enforcement', name: 'Freeze Window Enforcement', decision: 'DENY',          description: 'Write actions during release freeze windows are blocked.',                                  icon: Clock,         category: 'governance' },
-  { key: 'aegis_branch_naming',      name: 'Aegis Branch Naming',       decision: 'DENY',          description: 'All agent-created branches must follow the aegis_workstation convention. Single persistent branch per session with 7-day TTL.', icon: FileCode,      category: 'governance', connector: 'github' },
+  { key: 'aegis_branch_naming',      name: 'Aegis Branch Naming',       decision: 'DENY',          description: 'All agent-created branches must follow the aegis_workstation convention. Single persistent branch per session with 7-day TTL and auto-cleanup after PR merge.', icon: FileCode,      category: 'governance', connector: 'github' },
   { key: 'mandatory_pr_flow',        name: 'Mandatory PR Flow',         decision: 'REQUIRE_APPROVAL', description: 'Every agent write action must result in a pull request.',                                 icon: Eye,           category: 'governance', connector: 'github' },
   { key: 'no_autonomous_merge',      name: 'No Autonomous Merge',       decision: 'DENY',          description: 'Agents cannot merge pull requests without approval.',                                       icon: Lock,          category: 'safety',     connector: 'github' },
   { key: 'ci_required_before_merge', name: 'CI Required Before Merge',  decision: 'DENY',          description: 'Merge attempts are blocked if CI checks have not passed.',                                  icon: Zap,           category: 'safety',     connector: 'github' },
@@ -84,6 +85,22 @@ const policies: PolicyDef[] = [
   { key: 'gha_secret_rotation_gate', name: 'Secret Rotation Gate',      decision: 'REQUIRE_APPROVAL', description: 'Creating, updating, or deleting workflow secrets routes to approval.',                       icon: Lock,          category: 'compliance', connector: 'github-actions' },
 ];
 
+/**
+ * Policies that default to inactive in the demo workspace because they
+ * require a connector that isn't enabled yet. Surfaces as a muted/greyed
+ * row + "enable connector" inline note so the user understands WHY the
+ * policy is off rather than seeing an opaque disabled toggle.
+ */
+const INACTIVE_BY_DEFAULT = new Set<string>(['gha_secret_rotation_gate']);
+
+const INACTIVE_REASON: Record<string, { text: string; cta: string; href: string }> = {
+  gha_secret_rotation_gate: {
+    text: 'Requires GitHub Actions connector to enforce.',
+    cta: 'Enable in Connectors →',
+    href: '/dashboard/connectors',
+  },
+};
+
 const decodePolicyString = (s: string): Record<string, boolean> => {
   const bits = s.replace(/[^01]/g, '');
   return Object.fromEntries(
@@ -107,10 +124,9 @@ export default function PoliciesPage() {
 
   const defaultPolicyState = useMemo(
     () =>
-      Object.fromEntries(policies.map((p) => [p.key, true])) as Record<
-        string,
-        boolean
-      >,
+      Object.fromEntries(
+        policies.map((p) => [p.key, !INACTIVE_BY_DEFAULT.has(p.key)]),
+      ) as Record<string, boolean>,
     [],
   );
 
@@ -337,10 +353,27 @@ export default function PoliciesPage() {
                         <ConnectorIcon id={policy.connector} size={14} />
                       )}
                       {policy.name}
+                      {!isActive && INACTIVE_REASON[policy.key] && (
+                        <Badge tone="warning" uppercase>
+                          Connector required
+                        </Badge>
+                      )}
                     </p>
                     <p className="mt-0.5 text-[12.5px] leading-[1.5] text-[var(--neutral-sub-600)]">
                       {policy.description}
                     </p>
+                    {!isActive && INACTIVE_REASON[policy.key] && (
+                      <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-[var(--warning-dark)]">
+                        <AlertTriangle className="h-3 w-3 shrink-0" strokeWidth={2.25} />
+                        <span>{INACTIVE_REASON[policy.key].text}</span>
+                        <Link
+                          href={INACTIVE_REASON[policy.key].href}
+                          className="font-medium hover:underline"
+                        >
+                          {INACTIVE_REASON[policy.key].cta}
+                        </Link>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Badge tone={categoryTone[policy.category]} uppercase>
