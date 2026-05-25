@@ -14,19 +14,115 @@ Update when the target market evolves; don't update lightly.
 
 Aegis is a **B2B developer-tools governance product** that sits between AI
 coding agents (Cursor, Claude Code, VSCode Copilot) and a team's GitHub
-repos. It does four things:
+repos. Every agent action flows through the **Contextual Intelligence
+Layer** (the moat — see next section) before any policy evaluation. The
+product does four things:
 
 1. **Monitor** — every agent action gets logged with the tool, args, repo,
-   decision, latency.
-2. **Control** — policies + per-role tool allowlists + freeze windows
-   decide what agents are allowed to do, when.
-3. **Approve** — risky operations (REQUIRE_APPROVAL decisions) gate through
-   a human reviewer queue before executing.
-4. **Audit** — immutable trail of every decision, exportable for compliance.
+   `semantic_type`, `blast_radius`, decision, `decision_path`, latency.
+2. **Classify + decide** — the Contextual Intelligence Layer assembles
+   four context structs (Session / Repo / Branch / Env) and runs a
+   deterministic classifier that emits `semantic_type` + `blast_radius`,
+   which map to one of four decisions: ALLOW / DENY / **REWRITE** /
+   REQUIRE_APPROVAL. Per-role tool allowlists + freeze windows compose
+   with the classifier output.
+3. **Approve** — REQUIRE_APPROVAL decisions gate through a human
+   reviewer queue before executing.
+4. **Audit** — immutable trail of every (action, four contexts,
+   `semantic_type`, decision) tuple, exportable for compliance.
 
 The unit of scope is a **Room** (currently — naming under review; see
 "Naming tensions" below): one GitHub repo + a small team with roles +
 a tool allowlist per role + a unique MCP endpoint URL.
+
+## The Contextual Intelligence Layer (the moat)
+
+Aegis's differentiator is the **Contextual Intelligence Layer (CIL)** —
+a deterministic semantic classifier that lives between the agent and the
+policy engine. It's the reason policies become portable across MCP
+servers and why the product can REWRITE unsafe actions instead of just
+allow/deny. Without the CIL, Aegis would be a binary firewall. With it,
+Aegis is a context-aware governance engine.
+
+### How it works
+
+1. Agent calls a tool (e.g. `git push origin main`).
+2. CIL assembles **four context structs** from immediate + cached data:
+   - **`SessionContext`** — agent identity, session id, recent action history.
+   - **`RepoContext`** — repo metadata, protected branches, freeze windows.
+   - **`BranchContext`** — target branch, open PRs, recent CI status.
+   - **`EnvContext`** — time of day, active freeze window state, role of the caller.
+3. CIL runs a **deterministic classifier** (no LLM in the decision path)
+   that emits two outputs:
+   - `semantic_type` — *what kind of action this is* in policy terms.
+   - `blast_radius` — *how much surface area it touches* (minimal → critical).
+4. The (`semantic_type`, `blast_radius`, contexts) tuple maps to one of
+   four **decisions**:
+   - **ALLOW** — proceed unchanged.
+   - **DENY** — block before the payload reaches the downstream MCP.
+   - **REWRITE** — rewrite the action into a safe form (e.g. push to main
+     becomes push to a feature branch + auto-opened PR). *This is the
+     decision no competitor has — surface it prominently anywhere
+     decisions are shown.*
+   - **REQUIRE_APPROVAL** — pause, route to the human reviewer queue.
+
+### The 10 canonical semantic_types (current shipping set)
+
+| `semantic_type` | typical decision |
+|---|---|
+| `working_commit` | ALLOW |
+| `ephemeral_force_push` | ALLOW |
+| `test_only_change` | ALLOW |
+| `protected_branch_write` | **REWRITE** |
+| `freeze_window_violation` | DENY |
+| `credential_exposure` | DENY |
+| `autonomous_merge_attempt` | DENY |
+| `large_blast_radius_change` | REQUIRE_APPROVAL |
+| `sensitive_path_change` | REQUIRE_APPROVAL |
+| `sequence_anomaly` | REQUIRE_APPROVAL |
+
+### Why deterministic, not LLM
+
+- **Latency** — every agent call goes through CIL; LLM calls in the hot
+  path would add 200ms+ per action.
+- **Auditability** — compliance teams need explainable decisions, not
+  "the model thought…"
+- **Policy portability** — deterministic mapping is consistent across
+  repos and MCP servers, so policies written once apply to GitHub today
+  and Linear / Slack / future MCPs tomorrow.
+
+### The canonical action model
+
+CIL normalizes every incoming tool call into a `canonical_action_type`
+(e.g. `git_commit_to_branch`, `merge_pull_request`, `delete_branch`).
+That's how a "push to main" via the GitHub MCP and a "force push to main"
+via Claude Code's MCP both classify as the same `protected_branch_write`
+and get the same REWRITE treatment. **Policies are written against
+canonical actions, not against MCP-specific tool names.** This is what
+makes the product expandable beyond GitHub without rewriting the policy
+engine.
+
+### Adjacent concept: `aegis_workstation`
+
+The REWRITE decision relies on a per-room **persistent ephemeral working
+branch** named `aegis_workstation`. When an agent tries to push to a
+protected branch, Aegis rewrites the push onto `aegis_workstation` and
+opens a PR back into the intended branch. The agent's working state
+survives; the protected branch stays clean. Surface this name in
+demo/audit copy when the rewrite path is relevant.
+
+### Layer boundaries (so future sessions don't conflate them)
+
+- **Layer 1 — Interception/Normalization.** MCP shim that captures every
+  tool call and normalizes it into a `canonical_action_type`.
+- **Layer 2 — Contextual Intelligence (CIL).** Everything above. *This is
+  the moat.* What's shipping today.
+- **Layer 3 — Governance/Execution.** Policy evaluation, tool allowlists,
+  freeze windows, human-in-the-loop queue, audit log writer.
+- **Layer 4 — Behavioral baselines / amplifier signals.** Series-A
+  roadmap. *Not shipping.* Don't describe Aegis as "behavioral anomaly
+  detection" — that frames us into the wrong category. The classifier is
+  rule-based and deterministic; behavioral baselines come later.
 
 ## Target audience
 
@@ -82,8 +178,12 @@ matter — never optimize only one.
 |---|---|---|
 | Agent action, tool call, MCP | Workspace (already overloaded — see naming tensions) | "Bots" |
 | Repo, branch, PR, commit | "Room" (current name, naming under review) | "Conversations" |
-| Policy, allowlist, deny, rewrite | "Channel" (Slack-coded) | "Magic"/"smart" copy |
-| Audit trail, freeze window | "Team" (suggests people > permissions; we're more about permissions) | Cute personification of agents |
+| Policy, allowlist, deny, **REWRITE** | "Channel" (Slack-coded) | "Magic" / "smart" copy |
+| `semantic_type`, classification, classifier | "AI-powered" / "ML-driven" framing (we are deterministic) | "Behavioral anomaly detection" (wrong layer — roadmap, not shipping) |
+| `blast_radius`, `canonical_action_type` | "Team" (suggests people > permissions; we're more about permissions) | "Binary firewall" (undersells the CIL) |
+| Context-aware, deterministic, four contexts | | Cute personification of agents |
+| Audit trail, freeze window | | |
+| `aegis_workstation`, working branch | | |
 | Token spend, cost per agent | | |
 | Role hierarchy (OWNER > ADMIN > DEVELOPER) | | |
 | Pre-action approval, human-in-the-loop | | |
@@ -133,3 +233,18 @@ When designing a new screen / writing copy / naming a feature:
 
 6. **Token spend and cost are real concerns, not vanity metrics.** Show
    them prominently when relevant; don't hide them in settings.
+
+7. **Surface `semantic_type` everywhere actions appear.** Runs rows,
+   approval rows, audit rows, sessions, room logs — every action should
+   show its semantic_type chip. That chip is the customer-facing proof
+   that Aegis does semantic work, not byte-level firewalling. Treat
+   REWRITE as visually distinct (brand orange in the demo) — it's the
+   only decision no competitor has. Never describe Aegis as a "binary
+   firewall" or a "policy gateway" alone; the classifier is the moat.
+
+8. **When showing an Approval or Audit row, show the four contexts that
+   classified it.** `SessionContext` / `RepoContext` / `BranchContext` /
+   `EnvContext` are first-class audit artifacts — not implementation
+   detail. Customers expecting "explainable AI governance" should see
+   the inputs to every decision in the same surface as the decision
+   itself.
