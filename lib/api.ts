@@ -513,17 +513,19 @@ export const api = {
 
   getAuditTrail: async (
     userId?: string,
-    limit = 50,
+    limit = 20,
     offset = 0,
   ): Promise<SessionAction[]> => {
     if (!userId) return [];
-    const { items: rows } = await getUserActions(userId);
-    return rows
-      .sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      )
-      .slice(offset, offset + limit);
+
+    const page = Math.floor(offset / limit) + 1;
+
+    const { items } = await getUserActions(userId, {
+      page,
+      page_size: limit,
+    });
+
+    return items;
   },
 
   getAuditTrailByDateRange: async (
@@ -531,10 +533,28 @@ export const api = {
     startDate: string,
     endDate: string,
   ): Promise<SessionAction[]> => {
-    const { items: rows } = await getUserActions(userId);
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
-    return rows.filter((r) => {
+
+    let page = 1;
+    const pageSize = 100;
+
+    let allRows: SessionAction[] = [];
+    let hasMore = true;
+
+    while (hasMore) {
+      const { items } = await getUserActions(userId, {
+        page,
+        page_size: pageSize,
+      });
+
+      allRows = [...allRows, ...items];
+
+      hasMore = items.length === pageSize;
+      page += 1;
+    }
+
+    return allRows.filter((r) => {
       const t = new Date(r.timestamp).getTime();
       return t >= start && t <= end;
     });

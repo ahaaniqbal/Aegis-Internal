@@ -53,7 +53,7 @@ export default function AuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const pageSize = 50;
+  const pageSize = 20;
 
   // Filter state — client-side filtering layered over the fetched
   // page. Empty arrays = "all" (no filter). For a governance product
@@ -461,7 +461,7 @@ export default function AuditPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => setPage(Math.max(0, page - 1))}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                   leadingIcon={<ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />}
                 >
@@ -470,7 +470,7 @@ export default function AuditPage() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => setPage((p) => p + 1)}
                   disabled={events.length < pageSize}
                   trailingIcon={<ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />}
                 >
