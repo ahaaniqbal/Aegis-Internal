@@ -43,25 +43,34 @@ const BAND_DEFS: Record<
   Exclude<TrustBand, 'all'>,
   { label: string; min: number; max: number; tone: string }
 > = {
+  // Thresholds tuned to the demo's per-agent overrides below so most
+  // agents land in Watching (the realistic state for any active fleet),
+  // a few sit near the top, and only the hard-pinned quarantine agent
+  // (devin) shows up in the Quarantine tab.
   trusted:    { label: 'Trusted',    min: 0.9,  max: 1.01, tone: 'var(--success)' },
-  watching:   { label: 'Watching',   min: 0.75, max: 0.9,  tone: 'var(--warning)' },
-  quarantine: { label: 'Quarantine', min: 0.0,  max: 0.75, tone: 'var(--error)' },
+  watching:   { label: 'Watching',   min: 0.5,  max: 0.9,  tone: 'var(--warning)' },
+  quarantine: { label: 'Quarantine', min: 0.0,  max: 0.5,  tone: 'var(--error)' },
 };
 
 /**
- * Demo-only forced quarantine. The trust system computes anomaly-rate
- * naturally; in a live workspace this would derive from real CI failure
- * streaks + push sequences. For the demo we hard-pin one agent so the
- * Quarantine tab is never empty — that makes the trust system tangible.
+ * Demo-only per-agent trust score overrides. The trust system would
+ * compute these naturally from anomaly rate over time in a live
+ * workspace; for the demo we hard-pin specific scores so the Agents
+ * grid reads as a realistic fleet (mostly Watching, one quarantine).
  *
- * Reason copy comes from the canonical `sequence_anomaly` semantic_type:
- * push_count > 5 AND ci_failure_streak > 3.
+ * Each agent gets a `trust` value (0.0 – 1.0). The single agent that
+ * also has a `reason` lands in the Quarantine band with the visible
+ * banner that makes the trust system tangible.
  */
-const FORCED_QUARANTINE: Record<string, { trust: number; reason: string }> = {
-  devin: {
-    trust: 0.62,
-    reason: 'Sequence anomaly — 9 pushes with 5 consecutive CI failures',
-  },
+const AGENT_TRUST_OVERRIDES: Record<string, { trust: number; reason?: string }> = {
+  'devin':            { trust: 0.23, reason: 'Sequence anomaly — 9 pushes with 5 consecutive CI failures' },
+  'aider':            { trust: 0.68 },
+  'cursor-agent':     { trust: 0.71 },
+  'windsurf-cascade': { trust: 0.75 },
+  'gpt-4o':           { trust: 0.77 },
+  'github-copilot':   { trust: 0.79 },
+  'replit-agent':     { trust: 0.82 },
+  'claude-sonnet-4':  { trust: 0.84 },
 };
 
 export default function AgentsPage() {
@@ -115,12 +124,12 @@ export default function AgentsPage() {
       .map(([name, a]) => {
         const anomalyRate = a.runs > 0 ? a.anomalies / a.runs : 0;
         const naturalTrust = Math.max(TRUST_FLOOR, 1 - anomalyRate);
-        // Demo override: forced quarantine for tangibility (see
-        // FORCED_QUARANTINE above). Applies only when the agent is in
-        // the override set.
-        const override = FORCED_QUARANTINE[name];
+        // Demo override: hard-pin trust per agent so the fleet reads
+        // as a realistic mix. Only the agent with `reason` shows the
+        // quarantine banner; the rest just have their score set.
+        const override = AGENT_TRUST_OVERRIDES[name];
         const trust = override ? override.trust : naturalTrust;
-        const quarantineReason = override ? override.reason : null;
+        const quarantineReason = override?.reason ?? null;
         return {
           name,
           runs: a.runs,

@@ -82,7 +82,20 @@ interface FreezeWindowFormData {
   work_days: number[];
   window_start: string;
   window_end: string;
+  /** Demo-only scope field. Backend doesn't persist this yet; the
+   *  picker exists so the form reads as production-grade and the
+   *  customer doc-screenshot tells the full story. */
+  scope?: { type: 'all' } | { type: 'repo'; repo: string };
 }
+
+const AVAILABLE_REPOS_FOR_SCOPE = [
+  'aegis/dashboard',
+  'aegis/mcp-server',
+  'runaegis/api',
+  'jenilparmar/playground',
+  'runaegis/integrations',
+  'aegis/marketing',
+];
 
 // Mon-first matches the backend's `work_days` 0=Mon convention.
 // Visible labels are short so the day pills stay narrow.
@@ -825,6 +838,15 @@ function FreezeForm({
       </div>
 
       <div className="space-y-5 px-5 py-5">
+        {/* Repository scope — first field because it's the largest
+            mental model shift in a freeze window: "all repos" vs
+            "this one specific repo". Defaults to all-repos to match
+            the existing windows' implicit behavior. */}
+        <FreezeScopeField
+          scope={formData.scope ?? { type: 'all' }}
+          onChange={(scope) => setFormData({ ...formData, scope })}
+        />
+
         {/* Timezone — full-width select. We surface the picker first
             because TZ context changes the meaning of the times below.
             Globe icon makes the field feel geographic at a glance. */}
@@ -1085,5 +1107,90 @@ function FreezeWindowRow({
         <span className="hidden sm:inline">Delete</span>
       </button>
     </motion.li>
+  );
+}
+
+/**
+ * Repository scope field for the freeze-window form. Radio toggle
+ * between "All repositories" (default) and "Specific repository"
+ * with a repo dropdown.
+ *
+ * Demo-only state for now — the backend doesn't persist scope yet,
+ * so this picker exists so the form reads as production-grade and
+ * customer doc-screenshots tell the full story. When the backend
+ * lands, the scope field flows straight through to the API payload.
+ */
+function FreezeScopeField({
+  scope,
+  onChange,
+}: {
+  scope: { type: 'all' } | { type: 'repo'; repo: string };
+  onChange: (scope: { type: 'all' } | { type: 'repo'; repo: string }) => void;
+}) {
+  const isAll = scope.type === 'all';
+  return (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--neutral-sub-600)]">
+        Scope
+      </label>
+      <div
+        role="radiogroup"
+        className="inline-flex w-full items-center gap-0.5 rounded-[8px] border border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)] p-0.5"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={isAll}
+          onClick={() => onChange({ type: 'all' })}
+          className={cn(
+            'h-8 flex-1 rounded-[6px] px-3 text-[12px] font-semibold tracking-[-0.005em] transition-colors',
+            isAll
+              ? 'bg-[var(--white-0)] text-[var(--neutral-strong-950)] shadow-[0_1px_2px_rgba(23,23,23,0.06)]'
+              : 'text-[var(--neutral-sub-600)] hover:text-[var(--neutral-strong-950)]',
+          )}
+        >
+          All repositories
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!isAll}
+          onClick={() => onChange({ type: 'repo', repo: scope.type === 'repo' ? scope.repo : AVAILABLE_REPOS_FOR_SCOPE[0] })}
+          className={cn(
+            'h-8 flex-1 rounded-[6px] px-3 text-[12px] font-semibold tracking-[-0.005em] transition-colors',
+            !isAll
+              ? 'bg-[var(--white-0)] text-[var(--neutral-strong-950)] shadow-[0_1px_2px_rgba(23,23,23,0.06)]'
+              : 'text-[var(--neutral-sub-600)] hover:text-[var(--neutral-strong-950)]',
+          )}
+        >
+          Specific repository
+        </button>
+      </div>
+      {scope.type === 'repo' && (
+        <div className="relative mt-2">
+          <select
+            value={scope.repo}
+            onChange={(e) => onChange({ type: 'repo', repo: e.target.value })}
+            className="h-9 w-full appearance-none rounded-[8px] border border-[var(--stroke-sub-300)] bg-white pl-3 pr-9 font-mono text-[12px] text-[var(--neutral-strong-950)] focus:border-[var(--primary-base)] focus:outline-none focus:ring-[3px] focus:ring-[var(--primary-alpha-16)]"
+          >
+            {AVAILABLE_REPOS_FOR_SCOPE.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            aria-hidden
+            className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--neutral-soft-400)]"
+            strokeWidth={2}
+          />
+        </div>
+      )}
+      <p className="mt-1.5 text-[11px] text-[var(--neutral-soft-400)]">
+        {isAll
+          ? 'This freeze window applies to every connected repository.'
+          : 'This freeze window applies only to the repository selected above. Other repos stay open.'}
+      </p>
+    </div>
   );
 }

@@ -1143,7 +1143,7 @@ export default function TokenSpenditurePage() {
               <thead className="border-b border-[var(--stroke-soft-200)] bg-[var(--neutral-weak-50)]">
                 <tr>
                   <th className="px-[18px] py-[9px] text-left text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[var(--neutral-soft-400)]">
-                    Time (IST)
+                    Time
                   </th>
                   <th className="px-[18px] py-[9px] text-left text-[10.5px] font-semibold uppercase tracking-[0.05em] text-[var(--neutral-soft-400)]">
                     Session

@@ -722,7 +722,6 @@ const HARD_POLICIES = [
 
 const SOFT_POLICIES = [
   'BRANCH_POLICY',
-  'MISSING_FIELDS',
   'LARGE_DIFF',
 ] as const;
 

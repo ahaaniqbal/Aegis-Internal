@@ -155,9 +155,8 @@ const BOTTOM_ITEMS: NavItem[] = [
   // matches the rest of the product's hard rule against em dashes.
   {
     name: 'Support',
-    href: 'mailto:hello@runaegis.co?subject=Aegis%20support%20request',
+    href: '/dashboard/support',
     icon: LifeBuoy,
-    external: true,
   },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
