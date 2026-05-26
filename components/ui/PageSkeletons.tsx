@@ -238,6 +238,7 @@ export function RunsSkeleton() {
       {/* Filter bar */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Skeleton className="h-9 min-w-[260px] flex-1 rounded-[8px]" />
+        <Skeleton className="h-9 w-[180px] rounded-[8px]" />
         <Skeleton className="h-9 w-[140px] rounded-[8px]" />
       </div>
 
@@ -248,6 +249,9 @@ export function RunsSkeleton() {
           { width: 'w-[120px]' },             // Tool
           { width: 'flex-1 min-w-[140px]' }, // Repository
           { width: 'w-[100px]' },             // Branch
+          { width: 'w-[90px]' },              // Policy
+          { width: 'w-[90px]' },              // Blast radius
+          { width: 'w-[120px]' },             // Semantic type
           { width: 'w-[80px]' },              // Decision
           { width: 'w-[120px]' },             // Time/exec
           { width: 'w-6' },                   // chevron

@@ -184,6 +184,50 @@ function blastRadiusForDecision(decision: string): string {
   return pickW(table);
 }
 
+// ── Semantic-type pickers ─────────────────────────────────────────────────
+//
+// `semantic_type` classifies the *kind* of action so reviewers can scan
+// patterns faster than raw decision + blast-radius alone. Like blast-radius,
+// we weight by decision so demo mode shows realistic clustering: ALLOWs
+// skew to routine `working_commit` / `test_only_change`, DENYs skew to
+// the high-signal categories (`credential_exposure`, `freeze_window_violation`,
+// `sequence_anomaly`), and REQUIRE_APPROVAL fires when the agent is
+// trying something gated (`protected_branch_write`, `autonomous_merge_attempt`).
+const SEMANTIC_WEIGHTS: Record<string, ReadonlyArray<{ value: string; weight: number }>> = {
+  ALLOW: [
+    { value: 'working_commit',          weight: 55 },
+    { value: 'test_only_change',        weight: 30 },
+    { value: 'protected_branch_write',  weight: 8  },
+    { value: 'sensitive_path_change',   weight: 7  },
+  ],
+  REWRITE: [
+    { value: 'working_commit',           weight: 35 },
+    { value: 'sensitive_path_change',    weight: 25 },
+    { value: 'large_blast_radius_change',weight: 20 },
+    { value: 'protected_branch_write',   weight: 20 },
+  ],
+  REQUIRE_APPROVAL: [
+    { value: 'protected_branch_write',   weight: 35 },
+    { value: 'autonomous_merge_attempt', weight: 25 },
+    { value: 'large_blast_radius_change',weight: 20 },
+    { value: 'sensitive_path_change',    weight: 15 },
+    { value: 'ephemeral_force_push',     weight: 5  },
+  ],
+  DENY: [
+    { value: 'credential_exposure',      weight: 25 },
+    { value: 'freeze_window_violation',  weight: 20 },
+    { value: 'sequence_anomaly',         weight: 20 },
+    { value: 'protected_branch_write',   weight: 15 },
+    { value: 'autonomous_merge_attempt', weight: 10 },
+    { value: 'large_blast_radius_change',weight: 10 },
+  ],
+};
+
+function semanticTypeForDecision(decision: string): string {
+  const table = SEMANTIC_WEIGHTS[decision] ?? SEMANTIC_WEIGHTS.ALLOW;
+  return pickW(table);
+}
+
 const APPROVAL_STATUSES = [
   { value: 'pending',  weight: 6 },
   { value: 'approved', weight: 3 },
@@ -235,6 +279,7 @@ function makeRun(seq: number): SessionAction {
     // BlastRadiusChip read these on the Runs / Sessions / Room Logs pages.
     policy: policyForDecision(decision),
     blast_redius: blastRadiusForDecision(decision),
+    semantic_type: semanticTypeForDecision(decision),
   };
 }
 
@@ -444,6 +489,7 @@ function makeRoomAction(
     execution_time: Math.floor(80 + rand() * rand() * 6500),
     policy: policyForDecision(decision),
     blast_redius: blastRadiusForDecision(decision),
+    semantic_type: semanticTypeForDecision(decision),
     room_id: roomId,
     username: member.username,
   };

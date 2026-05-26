@@ -327,6 +327,134 @@ export function formatBlastRadius(value?: string | null): BlastRadiusDisplay {
   }
 }
 
+// ── Semantic type ─────────────────────────────────────────────────────────
+//
+// Backend-classified "kind of action" — surfaces patterns that pure
+// blast-radius / policy verdicts can't (e.g. a `test_only_change` is
+// always Low blast radius but worth calling out as safe; a
+// `credential_exposure` matters even when the policy verdict is `pass`
+// because the agent caught it pre-write). Stored on `SessionAction`
+// as a free-form string so the backend can introduce new categories
+// without a frontend release — unknown values still render with a
+// humanized label and neutral tone.
+
+export type SemanticType =
+  | 'working_commit'
+  | 'ephemeral_force_push'
+  | 'test_only_change'
+  | 'protected_branch_write'
+  | 'freeze_window_violation'
+  | 'credential_exposure'
+  | 'autonomous_merge_attempt'
+  | 'large_blast_radius_change'
+  | 'sensitive_path_change'
+  | 'sequence_anomaly'
+  | 'unknown';
+
+/** Lowercase + trim a backend semantic_type value into a known bucket. */
+export function normalizeSemanticType(value?: string | null): SemanticType {
+  if (!value) return 'unknown';
+  const v = value.toLowerCase().trim();
+  if (!v) return 'unknown';
+  switch (v) {
+    case 'working_commit':
+    case 'ephemeral_force_push':
+    case 'test_only_change':
+    case 'protected_branch_write':
+    case 'freeze_window_violation':
+    case 'credential_exposure':
+    case 'autonomous_merge_attempt':
+    case 'large_blast_radius_change':
+    case 'sensitive_path_change':
+    case 'sequence_anomaly':
+      return v as SemanticType;
+    default:
+      return 'unknown';
+  }
+}
+
+export type SemanticTypeDisplay = {
+  type: SemanticType;
+  label: string;
+  /** Maps to BadgeTone — drives the chip color. */
+  tone: 'success' | 'warning' | 'primary' | 'error' | 'neutral';
+};
+
+/** Stable rank for sorting by risk severity of the semantic type. */
+export function semanticTypeRank(value?: string | null): number {
+  switch (normalizeSemanticType(value)) {
+    case 'test_only_change':
+      return 1;
+    case 'working_commit':
+      return 2;
+    case 'protected_branch_write':
+    case 'autonomous_merge_attempt':
+    case 'ephemeral_force_push':
+      return 3;
+    case 'large_blast_radius_change':
+    case 'sensitive_path_change':
+      return 4;
+    case 'sequence_anomaly':
+    case 'freeze_window_violation':
+    case 'credential_exposure':
+      return 5;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Humanize backend semantic identifiers into user-facing chip labels.
+ * Labels are intentionally short (≤ 2 words where possible) so they
+ * read cleanly in the dense Runs table.
+ */
+export function formatSemanticType(value?: string | null): SemanticTypeDisplay {
+  const type = normalizeSemanticType(value);
+  switch (type) {
+    case 'working_commit':
+      return { type, label: 'Working commit', tone: 'neutral' };
+    case 'test_only_change':
+      return { type, label: 'Test only', tone: 'success' };
+    case 'protected_branch_write':
+      return { type, label: 'Protected branch', tone: 'warning' };
+    case 'autonomous_merge_attempt':
+      return { type, label: 'Auto merge', tone: 'warning' };
+    case 'ephemeral_force_push':
+      return { type, label: 'Force push', tone: 'warning' };
+    case 'large_blast_radius_change':
+      return { type, label: 'Large change', tone: 'primary' };
+    case 'sensitive_path_change':
+      return { type, label: 'Sensitive path', tone: 'primary' };
+    case 'freeze_window_violation':
+      return { type, label: 'Freeze violation', tone: 'error' };
+    case 'credential_exposure':
+      return { type, label: 'Credential exposure', tone: 'error' };
+    case 'sequence_anomaly':
+      return { type, label: 'Sequence anomaly', tone: 'error' };
+    default: {
+      const raw = (value ?? '').trim();
+      if (!raw) return { type, label: 'Unknown', tone: 'neutral' };
+      const cleaned = raw.replace(/[_-]+/g, ' ').toLowerCase();
+      const label = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      return { type, label, tone: 'neutral' };
+    }
+  }
+}
+
+/** All known semantic type values — used to populate filter dropdowns. */
+export const SEMANTIC_TYPES: ReadonlyArray<Exclude<SemanticType, 'unknown'>> = [
+  'working_commit',
+  'ephemeral_force_push',
+  'test_only_change',
+  'protected_branch_write',
+  'freeze_window_violation',
+  'credential_exposure',
+  'autonomous_merge_attempt',
+  'large_blast_radius_change',
+  'sensitive_path_change',
+  'sequence_anomaly',
+];
+
 // ── Room roles ────────────────────────────────────────────────────────────
 
 /**

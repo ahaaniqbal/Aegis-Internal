@@ -13,7 +13,11 @@ import {
   extractPullRequestUrl,
   formatExecutionTimeMs,
   formatFullTimestamp,
+  formatSemanticType,
+  normalizeSemanticType,
   readBlastRadius,
+  semanticTypeRank,
+  SEMANTIC_TYPES,
 } from '@/lib/utils';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import Topbar from '@/components/layout/Topbar';
@@ -30,6 +34,7 @@ import { Input } from '@/components/ui/Input';
 import { PolicyChip } from '@/components/ui/PolicyChip';
 import { PullRequestLink } from '@/components/ui/PullRequestLink';
 import { SelectMenu } from '@/components/ui/SelectMenu';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import {
   Table,
   TBody,
@@ -46,6 +51,7 @@ export default function RunsPage() {
   const reduce = useReducedMotion();
   const [search, setSearch] = useState('');
   const [decisionFilter, setDecisionFilter] = useState('all');
+  const [semanticFilter, setSemanticFilter] = useState('all');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const {
@@ -75,7 +81,11 @@ export default function RunsPage() {
         ? run.decision?.toUpperCase().includes('APPROVAL')
         : run.decision?.toUpperCase() === decisionFilter.toUpperCase());
 
-    return matchesSearch && matchesDecision;
+    const matchesSemantic =
+      semanticFilter === 'all' ||
+      normalizeSemanticType(run.semantic_type) === semanticFilter;
+
+    return matchesSearch && matchesDecision && matchesSemantic;
   });
 
   // Client-side sort layered on top of the filter. Default is null
@@ -87,7 +97,7 @@ export default function RunsPage() {
   // `risk` sorts by blast-radius severity rank (most severe last in
   // asc / first in desc) — more product-meaningful than sorting by
   // the textual blast-radius label.
-  type SortKey = 'agent' | 'tool' | 'repo' | 'policy' | 'risk' | 'decision' | 'time';
+  type SortKey = 'agent' | 'tool' | 'repo' | 'policy' | 'risk' | 'type' | 'decision' | 'time';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection>(null);
   const onSort = useCallback(
@@ -114,6 +124,7 @@ export default function RunsPage() {
         case 'repo':     return r.target_repo?.toLowerCase() ?? '';
         case 'policy':   return String(r.policy ?? '').toLowerCase();
         case 'risk':     return blastRadiusRank(readBlastRadius(r));
+        case 'type':     return semanticTypeRank(r.semantic_type);
         case 'decision': return r.decision ?? '';
         case 'time':     return new Date(r.timestamp).getTime();
       }
@@ -238,6 +249,24 @@ export default function RunsPage() {
                 />
               </div>
               <SelectMenu
+                value={semanticFilter}
+                onChange={setSemanticFilter}
+                ariaLabel="Filter by semantic type"
+                minWidth={220}
+                align="end"
+                options={[
+                  { value: 'all', label: 'All types', leading: <Swatch color="var(--neutral-soft-400)" /> },
+                  ...SEMANTIC_TYPES.map((t) => {
+                    const { label, tone } = formatSemanticType(t);
+                    return {
+                      value: t,
+                      label,
+                      leading: <Swatch color={toneSwatchColor(tone)} />,
+                    };
+                  }),
+                ]}
+              />
+              <SelectMenu
                 value={decisionFilter}
                 onChange={setDecisionFilter}
                 ariaLabel="Filter by decision"
@@ -253,11 +282,11 @@ export default function RunsPage() {
               />
             </div>
 
-            {/* Table — wide (9 data columns), so horizontal scroll stays
-                on at every breakpoint. Trades the page-level sticky thead
-                for a wrapper-level one — acceptable since this page is
-                table-first and the user is rarely scrolled far past the
-                header anyway. */}
+            {/* Table — wide (10 data columns including Semantic Type), so
+                horizontal scroll stays on at every breakpoint. Trades the
+                page-level sticky thead for a wrapper-level one — acceptable
+                since this page is table-first and the user is rarely
+                scrolled far past the header anyway. */}
             <Table scrollX>
               <THead>
                 <tr>
@@ -267,6 +296,7 @@ export default function RunsPage() {
                   <TH>Branch</TH>
                   <TH sortable sortDirection={dirFor('policy')} onSort={() => onSort('policy')}>Policy</TH>
                   <TH sortable sortDirection={dirFor('risk')} onSort={() => onSort('risk')}>Blast Radius</TH>
+                  <TH sortable sortDirection={dirFor('type')} onSort={() => onSort('type')}>Semantic Type</TH>
                   <TH sortable sortDirection={dirFor('decision')} onSort={() => onSort('decision')}>Decision</TH>
                   <TH sortable sortDirection={dirFor('time')} onSort={() => onSort('time')} className="text-right">Time</TH>
                   <TH aria-label="Expand" className="w-8" />
@@ -382,6 +412,9 @@ function RunRow({
           <BlastRadiusChip value={readBlastRadius(run)} />
         </TD>
         <TD className="whitespace-nowrap">
+          <SemanticTypeChip value={run.semantic_type} />
+        </TD>
+        <TD className="whitespace-nowrap">
           <div className="flex flex-col items-start gap-1">
             <DecisionBadge decision={run.decision} />
             {prUrl && <PullRequestLink url={prUrl} variant="chip" />}
@@ -413,7 +446,7 @@ function RunRow({
         onExitComplete={() => setStillExpanded(false)}
       >
       {isExpanded && (
-        <TRExpanded key="expanded" colSpan={9}>
+        <TRExpanded key="expanded" colSpan={10}>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-[var(--neutral-soft-400)]">
@@ -493,6 +526,24 @@ function Swatch({ color }: { color: string }) {
       aria-hidden
     />
   );
+}
+
+/**
+ * Map a `BadgeTone` to the matching design-token color used by
+ * `<Swatch>` inside select-menu options. Keeps the semantic-type
+ * filter visually parallel to the chip rendered in the table —
+ * "green dot in the dropdown" ↔ "green chip in the row".
+ */
+function toneSwatchColor(tone: string): string {
+  switch (tone) {
+    case 'success': return 'var(--success)';
+    case 'warning': return 'var(--warning)';
+    case 'primary': return 'var(--primary-base)';
+    case 'error':   return 'var(--error)';
+    case 'feature': return 'var(--feature)';
+    case 'info':    return 'var(--information)';
+    default:        return 'var(--neutral-soft-400)';
+  }
 }
 
 // ── Metric strip cell — divided cells inside one card (no gaps) ─────────────

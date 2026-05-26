@@ -36,6 +36,7 @@ import { BlastRadiusChip } from '@/components/ui/BlastRadiusChip';
 import { CodeChip } from '@/components/ui/CodeChip';
 import { PolicyChip } from '@/components/ui/PolicyChip';
 import { PullRequestLink } from '@/components/ui/PullRequestLink';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { DUR, EASE, fadeUp, fadeUpSm, staggerContainer } from '@/lib/motion';
 
 export default function SessionsPage() {
@@ -455,6 +456,7 @@ function SessionRow({
                             <DecisionBadge decision={action.decision} />
                             <PolicyChip policy={action.policy} />
                             <BlastRadiusChip value={readBlastRadius(action)} />
+                            <SemanticTypeChip value={action.semantic_type} />
                             {actionPrUrl && (
                               <PullRequestLink url={actionPrUrl} variant="chip" />
                             )}

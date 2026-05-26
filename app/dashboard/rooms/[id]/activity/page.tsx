@@ -52,6 +52,7 @@ import PaginatedLayout from '@/components/ui/PaginatedLayout';
 import { PolicyChip } from '@/components/ui/PolicyChip';
 import { PullRequestLink } from '@/components/ui/PullRequestLink';
 import { RelativeTime } from '@/components/ui/RelativeTime';
+import { SemanticTypeChip } from '@/components/ui/SemanticTypeChip';
 import { Table, TBody, TD, TH, THead, TR, TRExpanded } from '@/components/ui/Table';
 import { ToolLogo, getAgentToolId } from '@/components/ui/ToolLogo';
 
@@ -327,6 +328,7 @@ function RoomActivityRow({
           <div className="flex flex-col items-start gap-1">
             <PolicyChip policy={action.policy} />
             <BlastRadiusChip value={readBlastRadius(action)} />
+            <SemanticTypeChip value={action.semantic_type} />
           </div>
         </TD>
         <TD className="whitespace-nowrap">

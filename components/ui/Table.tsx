@@ -83,10 +83,11 @@ export function Table({
             // is purely a corner-rendering fix, no row-gap change.
             'w-full border-separate text-[13px] [border-spacing:0]',
             // Default: 760px on mobile, fluid on desktop.
-            // scrollX: 1180px floor at every breakpoint, so all 9 columns
-            // stay readable and the user scrolls horizontally on narrow
-            // viewports instead of having columns squish.
-            scrollX ? 'min-w-[1180px]' : 'min-w-[760px] lg:min-w-0',
+            // scrollX: 1320px floor at every breakpoint, so all columns
+            // (including the wider Semantic Type pill) stay readable and
+            // the user scrolls horizontally on narrow viewports instead
+            // of having columns squish.
+            scrollX ? 'min-w-[1320px]' : 'min-w-[760px] lg:min-w-0',
             // scrollX action rail: freeze the rightmost column (where the
             // chevron / kebab lives) to the right edge so it stays reachable
             // while the data columns scroll horizontally underneath. Pattern

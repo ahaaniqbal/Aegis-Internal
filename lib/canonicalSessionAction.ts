@@ -16,6 +16,7 @@ const KNOWN_KEYS = new Set([
   'user_id',
   'timestamp',
   'execution_time',
+  'semantic_type',
 ]);
 
 /**
@@ -40,6 +41,7 @@ export function toCanonicalSessionAction(action: SessionAction): Record<string, 
     user_id: action.user_id ?? null,
     timestamp: action.timestamp ?? null,
     execution_time: action.execution_time ?? null,
+    semantic_type: action.semantic_type ?? null,
   };
   if (Array.isArray(pointers) && pointers.length > 0) {
     base.action_pointers = pointers;

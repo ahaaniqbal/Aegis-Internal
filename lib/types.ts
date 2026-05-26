@@ -37,6 +37,15 @@ export interface SessionAction {
    */
   blast_redius?: string | null;
   blast_radius?: string | null;
+  /**
+   * Backend-classified intent of the action. One of a fixed enum (see
+   * `normalizeSemanticType`) — surfaces "what kind of change is this" so
+   * reviewers can quickly distinguish routine work (`working_commit`,
+   * `test_only_change`) from risky patterns (`credential_exposure`,
+   * `freeze_window_violation`, `sequence_anomaly`). Free-form string so
+   * the backend can introduce new categories without a frontend release.
+   */
+  semantic_type?: string | null;
 }
 
 export interface AggregatedSessionAction {
