@@ -14,6 +14,7 @@ import {
   Clock,
   Coins,
   Boxes,
+  LifeBuoy,
   Settings,
   Menu,
   X,
@@ -109,12 +110,16 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Insights',
     items: [
-      { name: 'Token Spenditure', href: '/dashboard/token-spenditure', icon: Coins },
+      { name: 'Token Expenditure', href: '/dashboard/token-spenditure', icon: Coins },
     ],
   },
 ];
 
 const BOTTOM_ITEMS: NavItem[] = [
+  // Support sits above Settings — when a pilot customer needs help,
+  // they look at the bottom of the sidebar (same pattern as Linear,
+  // Vercel, Stripe Dashboard).
+  { name: 'Support', href: '/dashboard/support', icon: LifeBuoy },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

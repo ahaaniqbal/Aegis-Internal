@@ -122,7 +122,7 @@ export function SelectMenu({
               minWidth: minWidth ?? triggerW,
             }}
             className={cn(
-              'absolute z-40 mt-1.5 overflow-hidden rounded-[10px] border border-[var(--stroke-soft-200)] bg-white p-1 shadow-[0_12px_32px_rgba(23,23,23,0.10),0_2px_8px_rgba(23,23,23,0.04)]',
+              'absolute z-40 mt-1.5 overflow-hidden rounded-[12px] border border-[var(--stroke-soft-200)] bg-white p-1.5 shadow-[0_12px_32px_rgba(23,23,23,0.10),0_2px_8px_rgba(23,23,23,0.04)]',
               align === 'end' ? 'right-0' : 'left-0',
             )}
           >
