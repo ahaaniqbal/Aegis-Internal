@@ -215,7 +215,7 @@ export function RoomSwitcher({
                 Without it the two surfaces shared an edge and read as
                 one continuous fill, which made it hard to see which
                 row was active and which was just hovered. */}
-            <div className="max-h-[320px] space-y-0.5 overflow-y-auto p-1.5">
+            <div className="max-h-[320px] space-y-0.5 overflow-y-auto p-1">
               {loading ? (
                 <div className="space-y-1 p-1">
                   {Array.from({ length: 3 }).map((_, i) => (

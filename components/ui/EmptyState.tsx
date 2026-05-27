@@ -2,31 +2,6 @@
 
 import { ReactNode } from 'react';
 
-/**
- * EmptyState — the canonical "no data yet" surface for the dashboard.
- *
- * Visual treatment is intentionally restrained: same concentric-sticker
- * pattern as `<IconMark>` (44x44 outer ring + 32x32 inner sticker carrying
- * a 16x16 line icon), scaled up to 56x56 for the empty-state context.
- *
- * Per the Refero design pass on dev-tool state surfaces (Linear, Vercel,
- * PlanetScale, Mercury, Cursor): strong dev-tool empty states never use
- * decorative illustrations, mascots, or branded gradients. The icon is
- * muted, the copy is direct and surface-specific, and the brand accent
- * is reserved for the primary CTA only.
- *
- *   icon         — pass a Lucide icon already styled by the caller, e.g.
- *                  `<Shield className="h-5 w-5" strokeWidth={2} />`. The
- *                  EmptyState wraps it in the sticker chrome and applies
- *                  the muted neutral color.
- *   title        — direct, surface-specific copy ("No runs yet", not
- *                  "Nothing here").
- *   description  — one-line explanation of what data will appear here.
- *   action       — optional <Button> or <Link>. Use brand orange ONLY when
- *                  this is the primary forward action.
- *   compact      — tighter padding for use inside panels.
- */
-
 interface EmptyStateProps {
   icon: ReactNode;
   title: string;
@@ -36,6 +11,11 @@ interface EmptyStateProps {
   compact?: boolean;
 }
 
+/**
+ * Empty state — soft concentric circles around the icon for visual depth.
+ * Inspired by the Cursor/Linear pattern of an illustrative icon backdrop
+ * instead of a flat boxed glyph.
+ */
 export default function EmptyState({
   icon,
   title,
@@ -49,20 +29,20 @@ export default function EmptyState({
         compact ? 'py-10' : 'py-16'
       }`}
     >
-      {/* IconMark-family sticker. Same concentric pattern as the row-level
-          IconMark, scaled to 56x56 for empty-state weight. Muted neutral
-          icon color so the brand accent stays reserved for the CTA below. */}
-      <div
-        aria-hidden
-        className="relative mb-5 flex h-14 w-14 items-center justify-center"
-      >
-        {/* Outer hairline ring */}
-        <div className="absolute h-14 w-14 rounded-full border border-[var(--stroke-soft-200)]" />
-        {/* Inner white sticker */}
-        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[var(--white-0)] shadow-[0_1px_2px_rgba(23,23,23,0.05)] ring-1 ring-[var(--stroke-soft-200)]">
+      {/* Concentric circles backdrop */}
+      <div className="relative mb-5 flex items-center justify-center" aria-hidden>
+        <div
+          className="absolute h-[88px] w-[88px] rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(250,115,25,0.08) 0%, rgba(250,115,25,0) 65%)',
+          }}
+        />
+        <div className="absolute h-[64px] w-[64px] rounded-full border border-[var(--stroke-soft-200)]" />
+        <div className="absolute h-[48px] w-[48px] rounded-full border border-[var(--stroke-soft-200)]" />
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-[0_1px_2px_rgba(23,23,23,0.06)] ring-1 ring-[var(--stroke-soft-200)]">
           <span
-            className="inline-flex items-center justify-center text-[var(--neutral-soft-400)]"
-            style={{ width: 20, height: 20 }}
+            className="inline-flex h-4 w-4 items-center justify-center text-[var(--primary-base)]"
           >
             {icon}
           </span>

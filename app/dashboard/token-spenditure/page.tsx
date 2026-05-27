@@ -326,7 +326,7 @@ export default function TokenSpenditurePage() {
   if (userLoading || loading) {
     return (
       <>
-        <Topbar title="Token Expenditure" subtitle={rangeSubtitle(usageRange)} showDateRange />
+        <Topbar title="Token Spenditure" subtitle={rangeSubtitle(usageRange)} showDateRange />
         <div className="mx-auto max-w-[1320px] 2xl:max-w-[1480px] px-4 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
           <TokenSpendSkeleton />
         </div>
@@ -337,7 +337,7 @@ export default function TokenSpenditurePage() {
   return (
     <>
       <Topbar
-        title="Token Expenditure"
+        title="Token Spenditure"
         subtitle={rangeSubtitle(usageRange)}
         lastUpdated={lastUpdated}
         onRefresh={fetchData}
