@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import Sidebar from './Sidebar';
+import { DemoModeBanner } from '@/components/dashboard/DemoModeBanner';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -15,6 +16,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         className="min-h-dvh pt-12 lg:pt-0 lg:ml-[var(--sidebar-w)]"
         style={{ transition: 'margin-left var(--sidebar-transition)' }}
       >
+        {/* Demo-mode amber strip. Renders only when localStorage.aegis_demo
+            is set and the user hasn't dismissed it. Hidden in real workspace. */}
+        <DemoModeBanner />
         {children}
       </main>
     </div>
