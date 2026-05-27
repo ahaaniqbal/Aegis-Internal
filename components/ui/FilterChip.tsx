@@ -137,11 +137,11 @@ export function FilterChip({
           role="menu"
           className={cn(
             'absolute left-0 top-full z-30 mt-1.5 min-w-[200px] max-w-[280px] overflow-hidden',
-            'rounded-[10px] border border-[var(--stroke-soft-200)] bg-white',
+            'rounded-[12px] border border-[var(--stroke-soft-200)] bg-white',
             'shadow-[0_12px_32px_rgba(23,23,23,0.10),0_2px_8px_rgba(23,23,23,0.04)]',
           )}
         >
-          <div className="max-h-[280px] overflow-y-auto p-1">
+          <div className="max-h-[280px] overflow-y-auto p-1.5">
             {options.length === 0 ? (
               <div className="px-3 py-2.5 text-[12px] text-[var(--neutral-soft-400)]">
                 No options available.
