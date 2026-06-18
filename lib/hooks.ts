@@ -5,6 +5,7 @@ import { User } from './types';
 
 const USER_KEY = 'aegis_user';
 const ONBOARDING_KEY = 'aegis_onboarding_step';
+const EMAIL_KEY = 'aegis_email';
 
 export function useUser() {
   const [user, setUserState] = useState<User | null>(null);
@@ -72,4 +73,27 @@ export function useAutoRefresh(callback: () => void, intervalMs: number = 30000)
   }, [intervalMs]);
 
   return { lastUpdated };
+}
+
+export function useEmail() {
+  const [email, setEmailState] = useState<string>('');
+
+  useEffect(() => {
+    const stored = localStorage.getItem(EMAIL_KEY);
+    if (stored) {
+      setEmailState(stored);
+    }
+  }, []);
+
+  const setEmail = useCallback((e: string) => {
+    localStorage.setItem(EMAIL_KEY, e);
+    setEmailState(e);
+  }, []);
+
+  const clearEmail = useCallback(() => {
+    localStorage.removeItem(EMAIL_KEY);
+    setEmailState('');
+  }, []);
+
+  return { email, setEmail, clearEmail };
 }

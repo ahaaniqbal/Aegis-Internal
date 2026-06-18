@@ -1,0 +1,8 @@
+{
+    "mcpServers": {
+      "aegis_dep": {
+        "transport": "sse",
+        "url": "https://app.runaegis.co/sse?user_id=42cb5f33-38a3-4802-950f-e1dc61e891ba&room_id=771ad127-b7e5-4c5c-a8f2-8813a4e91a6f&access_token=eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiNDJjYjVmMzMtMzhhMy00ODAyLTk1MGYtZTFkYzYxZTg5MWJhIiwiZXhwIjoxNzc4NTExMTE3fQ.Q8HnELN17HIONz0ymcifXFMq4SfN1PNhLKhgkT2lTIMd2dS8s3UdkWROQTa2mhjuPaQzWEMjmRVV6mjAJGDY3A&role=OWNER"
+      }
+    }
+}

@@ -1,20 +1,39 @@
 'use client';
 
 const sizes = {
-  sm: 'h-4 w-4',
+  sm: 'h-3.5 w-3.5',
   md: 'h-5 w-5',
-  lg: 'h-6 w-6',
+  lg: 'h-7 w-7',
 };
 
-export default function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+interface LoadingSpinnerProps {
+  size?: keyof typeof sizes;
+  /** Use neutral gray instead of brand orange. */
+  muted?: boolean;
+}
+
+export default function LoadingSpinner({
+  size = 'md',
+  muted = false,
+}: LoadingSpinnerProps) {
   return (
     <svg
-      className={`animate-spin text-muted-foreground ${sizes[size]}`}
+      className={`animate-spin ${sizes[size]}`}
+      style={{ color: muted ? 'var(--neutral-soft-400)' : 'var(--primary-base)' }}
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
+      role="status"
+      aria-label="Loading"
     >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="3"
+      />
       <path
         className="opacity-75"
         fill="currentColor"

@@ -1,21 +1,47 @@
 'use client';
 
 import { getInitials } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+
+type Size = 'xs' | 'sm' | 'md' | 'lg';
+
+const sizes: Record<Size, { box: string; text: string }> = {
+  xs: { box: 'h-5 w-5',         text: 'text-[9px]'  },
+  sm: { box: 'h-[26px] w-[26px]', text: 'text-[11px]' },
+  md: { box: 'h-8 w-8',          text: 'text-[12px]' },
+  lg: { box: 'h-10 w-10',        text: 'text-[13px]' },
+};
 
 interface AgentAvatarProps {
   name: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: Size;
+  className?: string;
+  /** When true (default), uses the orange brand tint; false uses neutral gray. */
+  tinted?: boolean;
 }
 
-const sizes = {
-  sm: 'h-6 w-6 text-[10px]',
-  md: 'h-8 w-8 text-xs',
-  lg: 'h-10 w-10 text-sm',
-};
-
-export default function AgentAvatar({ name, size = 'md' }: AgentAvatarProps) {
+export default function AgentAvatar({
+  name,
+  size = 'sm',
+  className,
+  tinted = true,
+}: AgentAvatarProps) {
+  const sz = sizes[size];
   return (
-    <div className={`flex items-center justify-center rounded-full bg-muted font-medium text-muted-foreground ${sizes[size]}`}>
+    <div
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center rounded-full font-semibold',
+        sz.box,
+        sz.text,
+        className,
+      )}
+      style={
+        tinted
+          ? { backgroundColor: 'rgba(250, 115, 25, 0.10)', color: 'var(--primary-base)' }
+          : { backgroundColor: 'var(--neutral-soft-200)', color: 'var(--neutral-sub-600)' }
+      }
+      title={name}
+    >
       {getInitials(name)}
     </div>
   );

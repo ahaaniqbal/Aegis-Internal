@@ -1,94 +1,918 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────
+   AlignUI Design System — Orange theme, Light mode only
+   Tokens sourced from Figma-verified AlignUI specification.
+   ───────────────────────────────────────────────────────────────── */
+
 :root {
-  /* Background & Foreground */
-  --background: #09090b;
-  --foreground: #fafafa;
+  /* Neutral scale */
+  --white-0:           #ffffff;
+  --neutral-weak-50:   #f7f7f7;
+  --neutral-soft-200:  #ebebeb;
+  --neutral-sub-300:   #d1d1d1;
+  --neutral-soft-400:  #a3a3a3;
+  --neutral-sub-600:   #5c5c5c;
+  --neutral-strong-950:#171717;
 
-  /* Card/Surface */
-  --card: #0f0f11;
-  --card-foreground: #fafafa;
+  /* Orange theme — primary */
+  --primary-base:      #fa7319;
+  --primary-dark:      #ce5e12;
+  --primary-lighter:   #fff3eb;
+  --primary-alpha-10:  rgba(250, 115, 25, 0.10);
+  --primary-alpha-16:  rgba(250, 115, 25, 0.16);
+  --primary-alpha-24:  rgba(250, 115, 25, 0.24);
 
-  /* Muted */
-  --muted: #18181b;
-  --muted-foreground: #71717a;
+  /* Semantic */
+  --success:           #1fc16b;
+  --success-lighter:   #e3f7ec;
+  --success-dark:      #0b4627;
 
-  /* Border */
-  --border: #27272a;
+  --error:             #fb3748;
+  --error-lighter:     #ffebec;
+  --error-dark:        #681219;
 
-  /* Primary — white CTA */
-  --primary: #ffffff;
-  --primary-foreground: #09090b;
+  --warning:           #f6b51e;
+  --warning-lighter:   #fffaeb;
+  --warning-dark:      #624c18;
 
-  /* Secondary */
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
+  --feature:           #7d52f4;
+  --feature-lighter:   #efebff;
+  --feature-dark:      #351a75;
 
-  /* Status */
-  --success: #22c55e;
-  --destructive: #ef4444;
+  /* Chart-only muted plum. Distinct from --feature (bright AlignUI
+     purple, used in Rewrite badges) because chart fills need lower
+     saturation to read well at scale.
 
-  /* Radius */
-  --radius: 0.5rem;
+     Iteration history:
+       v1: monochrome (#171717) — black bars dominated.
+       v2: AlignUI feature purple (#7d52f4) — read as too-bright blue.
+       v3: muted plum (#7c5e8c) — better but mismatched with brand temp.
+       v4: deep slate (#1e293b) — Cursor/Mercury palette, but the
+       slate-vs-brand-orange contrast made the charts feel grim.
+       v5: soft cornflower (#74C4FF) — Stock Unlock match. Too pastel.
+     v6: periwinkle (#6268F8) — vibrant but still light next to amber.
+     v7 (now): deep indigo (#4338CA, Tailwind indigo-700) — same role
+       (secondary series) but a noticeably deeper, more weighty blue
+       that anchors the chart against the amber primary. Token name
+       kept (--chart-plum) for backwards compat. */
+  --chart-plum:        #4338CA;
+  /* Chart primary-series amber. Light = soft amber (#F8A748) paired
+     with --chart-plum's indigo. Dark = Aegis brand orange (#fa7319)
+     for a more confident pop against the dark page bg. Used by chart
+     fills (via chartConfig) AND any outside-chart series indicators
+     (Legend dots, Stat strip dots) so the palette stays in sync. */
+  --chart-amber:       #F8A748;
+
+  --information:       #335cff;
+  --info-lighter:      #ebefff;
+  --info-dark:         #162060;
+
+  /* Strokes */
+  --stroke-soft-200:   #ebebeb;
+  --stroke-sub-300:    #d1d1d1;
+
+  /* Shadow */
+  --shadow-regular-xs: 0 1px 2px rgba(23, 23, 23, 0.04);
+
+  /* Surfaces (semantic aliases) */
+  --bg-app:            var(--neutral-weak-50);
+  --bg-surface:        var(--white-0);
+  --bg-surface-alt:    var(--neutral-weak-50);
+  --text-strong:       var(--neutral-strong-950);
+  --text-sub:          var(--neutral-sub-600);
+  --text-soft:         var(--neutral-soft-400);
+  --border-soft:       var(--stroke-soft-200);
+  --border-sub:        var(--stroke-sub-300);
+
+  /* Sidebar geometry — expanded is the default 220px width. When
+     `[data-sidebar-collapsed]` is set on <html>, this flips to 56px
+     (icon-only rail). Layout.tsx + Sidebar.tsx both consume this var
+     so they stay in lockstep. Transition timing tuned to feel
+     intentional, not floaty (200ms emphasized-decel). */
+  --sidebar-w: 220px;
+  --sidebar-transition: 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Table header surface — slightly lifted from card body. Dark mode
+     overrides to a different shade for better separation against the
+     dark card surface. */
+  --table-header-bg: #F7F7F7;
+
+  /* Keycap chips (kbd) — used in the command palette footer hints,
+     tooltips, and anywhere we want a "press this key" affordance.
+     The chip MUST read as ELEVATED above whatever surface it sits on.
+     Light mode: footer is on neutral-weak-50 (#f7f7f7) so kbds use
+     pure white — whiter than parent, reads as raised. The inset
+     highlight at 60% white mimics light hitting the top edge.
+     Dark mode override (below in [data-theme="dark"]): flips bg to
+     neutral-soft-200 (#1f1f23, one shade ABOVE the dark footer's
+     #18181b) and dims the highlight hard so it doesn't glow. */
+  --kbd-bg: var(--white-0);
+  --kbd-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+                0 1px 0 0 var(--stroke-soft-200);
+
+  /* Primary button — light-mode defaults (existing gradient). These are
+     overridden in [data-theme="dark"] to a muted treatment that
+     harmonizes with dark surfaces. */
+  --btn-primary-bg:        linear-gradient(180deg, #fb8939 0%, #fa7319 55%, #ed6a14 100%);
+  --btn-primary-bg-hover:  linear-gradient(180deg, #fa7d27 0%, #ed6a14 55%, #d75e10 100%);
+  --btn-primary-bg-active: linear-gradient(180deg, #ed6a14 0%, #d75e10 100%);
+  --btn-primary-border:    var(--primary-dark);
+  --btn-primary-shadow:    inset 0 1px 0 0 rgba(255, 255, 255, 0.18),
+                           0 1px 2px rgba(206, 94, 18, 0.30),
+                           0 1px 0 0 rgba(0, 0, 0, 0.04);
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   Dark mode — Aegis production dark theme
+   Activated by setting [data-theme="dark"] on the document root.
+   Scoped to /dashboard via app/dashboard/layout.tsx — auth and
+   onboarding flows stay light. Theme choice persists in
+   localStorage.aegis_theme.
+
+   Palette: Linear/Vercel-tier "warm near-black with tight elevation
+   steps". Researched via Refero (Linear dashboards, Vercel deployments,
+   Anthropic Console, Factory.ai). Specifically:
+     • App bg #08080a — true near-black
+     • Card surfaces #0f0f11 — barely above app bg, cinematic depth
+     • Borders #1d1d20 — hairline, just enough for edge definition
+     • Zero drop shadows — elevation purely from border (Linear sig)
+     • Text #fafafa — warm white, NOT pure white
+     • Brand orange unchanged at base, muted for filled CTAs
+   ───────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  /* Neutral scale — warm near-black with tight elevation steps */
+  --white-0:           #0f0f11;  /* card surface — barely above app bg */
+  --neutral-weak-50:   #18181b;  /* hover / elevated panel */
+  --neutral-soft-200:  #1f1f23;  /* subtle divider */
+  --neutral-sub-300:   #2a2a2f;  /* stronger border (still very subtle) */
+  --neutral-soft-400:  #71717a;  /* dimmed text / icons (Linear-exact gray) */
+  --neutral-sub-600:   #a1a1aa;  /* secondary text */
+  --neutral-strong-950:#fafafa;  /* primary text — warm white */
+
+  /* Strokes — hairline visibility, signature of the tier */
+  --stroke-soft-200:   #1d1d20;
+  --stroke-sub-300:    #2a2a2f;
+
+  /* Brand orange — base unchanged. `--primary-dark` flips BRIGHT per
+     AlignUI dark spec, so hover-on-dark lifts instead of deepening. */
+  --primary-base:      #fa7319;
+  --primary-dark:      #ff8a3c;
+  --primary-lighter:   rgba(250, 115, 25, 0.14);
+  --primary-alpha-10:  rgba(250, 115, 25, 0.10);
+  --primary-alpha-16:  rgba(250, 115, 25, 0.18);
+  --primary-alpha-24:  rgba(250, 115, 25, 0.32);
+
+  /* Semantic state — `*-dark` tokens flip to BRIGHT AlignUI dark-spec
+     variants. Badge text (which uses `text-[var(--*-dark)]`) lands on
+     a faint colored wash against near-black; bright text reads cleanly.
+     Same flip handles hover-on-dark — lifts instead of deepens. */
+  --success:           #3ee089;
+  --success-lighter:   rgba(62, 224, 137, 0.14);
+  --success-dark:      #3ee089;
+
+  --error:             #ff6875;
+  --error-lighter:     rgba(255, 104, 117, 0.14);
+  --error-dark:        #ff6875;
+
+  --warning:           #ffd268;
+  --warning-lighter:   rgba(255, 210, 104, 0.14);
+  --warning-dark:      #ffd268;
+
+  --feature:           #8c71f6;
+  --feature-lighter:   rgba(140, 113, 246, 0.14);
+  --feature-dark:      #a78bfa;  /* lifted lilac — REWRITE badge legibility */
+
+  /* Dark-mode chart secondary — lighter periwinkle (one step brighter
+     than light-mode's deep indigo #4338CA). Deep indigo on a dark page
+     bg loses contrast; the lifted version stays readable. */
+  --chart-plum:        #6268F8;
+  /* Dark-mode chart primary — Aegis brand orange. Brighter and more
+     saturated than the light-mode amber, gives the primary series a
+     confident pop on the dark page bg. */
+  --chart-amber:       #fa7319;
+
+  --information:       #4d82ff;
+  --info-lighter:      rgba(77, 130, 255, 0.14);
+  --info-dark:         #4d82ff;
+
+  /* Table header — slightly more visible shade in dark. Default
+     `--neutral-weak-50` (#18181b) felt too close to the card body
+     (#0f0f11). Bumping to `--neutral-soft-200` (#1f1f23) gives a
+     clearer header band without becoming heavy. */
+  --table-header-bg: var(--neutral-soft-200);
+
+  /* Keycap chips — dark-mode flip.
+     Light kbds used --white-0 (pure white) on a neutral-weak-50
+     footer. In dark, --white-0 is #0f0f11 (the card surface) which
+     is DARKER than the footer (--neutral-weak-50 = #18181b in dark),
+     so the kbd would read as a "hole" in the footer instead of an
+     elevated chip. Flip to --neutral-soft-200 (#1f1f23) — one shade
+     ABOVE the dark footer — so the chip stays raised. The inset
+     top highlight drops from 60% white (way too bright in dark)
+     to 4% white — a hairline rim that suggests dimension without
+     glowing. Bottom shadow uses a faint near-black instead of the
+     light-mode stroke color, which would be invisible in dark. */
+  --kbd-bg: var(--neutral-soft-200);
+  --kbd-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+                0 1px 0 0 rgba(0, 0, 0, 0.4);
+
+  /* Primary button — dialed in from feedback. First pass was too muted
+     (read as brown, lost brand identity). Light mode stops are
+     `#fb8939 → #fa7319 → #ed6a14`; these sit ~15-20% darker so the
+     orange still reads as orange but doesn't shout against near-black. */
+  --btn-primary-bg:        linear-gradient(180deg, #e2671a 0%, #cf5912 55%, #b34c0d 100%);
+  --btn-primary-bg-hover:  linear-gradient(180deg, #cf5912 0%, #b34c0d 55%, #964009 100%);
+  --btn-primary-bg-active: linear-gradient(180deg, #b34c0d 0%, #964009 100%);
+  --btn-primary-border:    #964009;
+  --btn-primary-shadow:    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+                           0 1px 2px rgba(0, 0, 0, 0.5);
+
+  /* Shadow — Linear/Vercel signature: NO drop shadow. Border does all
+     the elevation work. We keep the variable defined so anywhere that
+     references --shadow-regular-xs doesn't break — it's a no-op. */
+  --shadow-regular-xs: 0 0 0 0 transparent;
+
+  /* Surfaces */
+  --bg-app:            #08080a;  /* app shell — true near-black */
+  --bg-surface:        var(--white-0);
+  --bg-surface-alt:    var(--neutral-weak-50);
+  --text-strong:       var(--neutral-strong-950);
+  --text-sub:          var(--neutral-sub-600);
+  --text-soft:         var(--neutral-soft-400);
+  --border-soft:       var(--stroke-soft-200);
+  --border-sub:        var(--stroke-sub-300);
+}
+
+/* ─── Dark-mode catch-alls ───────────────────────────────────────────
+   These cover the small handful of components that use literal
+   Tailwind utility classes (`bg-white`) instead of design tokens, plus
+   global element styles (body, scrollbar, inputs) that aren't on the
+   token system. The `text-white` utility is deliberately NOT flipped —
+   it's used on colored buttons where literal white is intended. */
+[data-theme="dark"] .bg-white {
+  background-color: var(--white-0);
+}
+[data-theme="dark"] body,
+[data-theme="dark"] html {
+  background: var(--bg-app);
+  color: var(--text-strong);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--neutral-soft-200);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--neutral-sub-300);
+}
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: var(--white-0);
+  border-color: var(--border-sub);
+  color: var(--text-strong);
+}
+[data-theme="dark"] input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 30px var(--white-0) inset;
+  -webkit-text-fill-color: var(--text-strong);
+}
+
+
+/* Theme inline — exposes tokens as Tailwind utilities via arbitrary values */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-success: var(--success);
-  --color-destructive: var(--destructive);
+  /* Transition defaults — picked up by every Tailwind transition
+     utility (`transition`, `transition-colors`, `transition-all`,
+     `transition-opacity`, etc.) AND by the element-level transitions
+     defined below. 180ms emphasized-decel curve matches the
+     Linear/Cursor/Raycast IDE-tier feel: fast initial response, slow
+     settle. Single source of truth — change here and everything
+     hover-related flows. */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  --font-sans: 'Inter', 'Inter Fallback', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', 'SF Mono', monospace;
+  --color-white-0: var(--white-0);
+  --color-weak-50: var(--neutral-weak-50);
+  --color-soft-200: var(--neutral-soft-200);
+  --color-sub-300: var(--neutral-sub-300);
+  --color-soft-400: var(--neutral-soft-400);
+  --color-sub-600: var(--neutral-sub-600);
+  --color-strong-950: var(--neutral-strong-950);
+
+  --color-primary-base: var(--primary-base);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-lighter: var(--primary-lighter);
+
+  --color-success-base: var(--success);
+  --color-success-lighter: var(--success-lighter);
+  --color-success-dark: var(--success-dark);
+
+  --color-error-base: var(--error);
+  --color-error-lighter: var(--error-lighter);
+  --color-error-dark: var(--error-dark);
+
+  --color-warning-base: var(--warning);
+  --color-warning-lighter: var(--warning-lighter);
+  --color-warning-dark: var(--warning-dark);
+
+  --color-feature-base: var(--feature);
+  --color-feature-lighter: var(--feature-lighter);
+  --color-feature-dark: var(--feature-dark);
+
+  --color-info-base: var(--information);
+  --color-info-lighter: var(--info-lighter);
+  --color-info-dark: var(--info-dark);
+
+  /* Back-compat aliases so existing class refs keep working */
+  --color-background: var(--bg-app);
+  --color-foreground: var(--text-strong);
+  --color-card: var(--bg-surface);
+  --color-card-foreground: var(--text-strong);
+  --color-muted: var(--neutral-weak-50);
+  --color-muted-foreground: var(--text-soft);
+  --color-border: var(--border-soft);
+  --color-primary: var(--primary-base);
+  --color-primary-foreground: var(--white-0);
+  --color-secondary: var(--neutral-soft-200);
+  --color-secondary-foreground: var(--text-strong);
+  --color-success: var(--success);
+  --color-destructive: var(--error);
+
+  /* Font family — numbers across the dashboard render in the default sans
+     (Geist) for a softer, less devtool-y feel. CodeChip overrides locally
+     via [font-family:var(--font-geist-mono),…] so true monospace stays
+     where it semantically belongs (tool names, branches, IDs, JSON). */
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
+/* Base */
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+  background: var(--bg-app);
+  color: var(--text-strong);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+/* Hide the document scrollbar so the topbar + content span the full
+   viewport width with no right-side gutter. Scroll still works via
+   wheel / touch / keyboard / page-down. Applied at the html/body
+   level since the body is the scroll container in the classic
+   dashboard layout. Auth + onboarding pages don't have long content,
+   so hiding here is a no-op for them. */
+html, body {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy Edge / IE */
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;                /* WebKit */
+}
 
-/* Focus ring — white at 20% opacity */
+/* Scrollbar — sleek, neutral, applied to any element that opts into
+   visible scrollbars (skipped at document level by the rules above).
+   6px feels right alongside our 12-13px body text — anything thicker
+   reads as desktop-OS chrome inside what's meant to be a polished
+   in-page rail. Thumb starts at very subtle alpha and brightens on
+   hover so the affordance only competes for attention when the user
+   actively engages with it. Firefox uses `thin` (the OS-thinnest
+   variant) and our two custom thumb colors. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--neutral-soft-200) transparent;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--neutral-soft-200);
+  border-radius: 999px;
+  transition: background-color 120ms ease;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--neutral-sub-300); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Scrollbar — fully hidden for elements marked `data-scrollable`.
+   Zero layout space reclaimed → the inset content card's topbar
+   spans the full card width with no right-side gutter.
+   Wheel / touch / keyboard scrolling still works (this only hides
+   the visual scrollbar; it doesn't disable scrolling).
+   If we want a visible-during-scroll indicator later, that needs a
+   custom JS-driven overlay since native scrollbar width can't
+   transition smoothly between 0 and 8px without layout shift. */
+[data-scrollable] {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* legacy IE / old Edge */
+}
+[data-scrollable]::-webkit-scrollbar {
+  display: none;                /* WebKit (Chrome, Safari) */
+}
+
+/* Focus ring — orange at 24% */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px var(--primary-alpha-24);
+  border-radius: 8px;
 }
 
-/* Transitions */
-button, a, input, select, textarea {
-  transition: all 150ms ease;
+/* Suppress every possible outline/halo source on the command palette
+   input. The input lives inside a clearly-focused modal (search icon
+   to its left, blinking cursor, kbd hint + close X to its right) —
+   any halo around the input itself is redundant visual noise.
+
+   This rule has to cover a lot of ground because the "outline" we see
+   could come from:
+     • The global :focus-visible halo (box-shadow)
+     • The browser's UA :focus outline
+     • A :hover bg change inherited from somewhere
+     • A border on the input itself
+   So we clear outline / box-shadow / border across idle / hover /
+   focus / focus-visible / active. !important wins over both the
+   global rule above AND Tailwind utility classes regardless of
+   compilation order. */
+[data-command-palette-input],
+[data-command-palette-input]:hover,
+[data-command-palette-input]:focus,
+[data-command-palette-input]:focus-visible,
+[data-command-palette-input]:active {
+  outline: none !important;
+  outline-style: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
 
-/* Input base */
+/* ─── Interactive cursors ────────────────────────────────────────────
+   Buttons and select elements don't get `cursor: pointer` by default in
+   most browsers. Add it for every element that's clearly clickable —
+   covers native buttons, anchors with hrefs, switches, tabs, labels,
+   checkboxes, radios, and any element flagged as a button/link/tab via
+   ARIA. Disabled elements get `not-allowed`. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="link"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="checkbox"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+a[href],
+label[for],
+select:not(:disabled),
+summary,
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="reset"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+[disabled],
+.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+/* ─── Transitions — explicit properties, emphasized-decel curve for a
+   premium hover feel. Never `transition: all` (triggers layout thrash
+   on every property change). Duration + curve match the Tailwind
+   defaults set in @theme below, so utility-class transitions
+   (`transition-colors` etc.) and these element-level baselines stay
+   in lockstep. */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+[role="link"],
+[role="tab"],
+[role="switch"] {
+  transition-property: background-color, border-color, color, box-shadow,
+    transform, opacity, filter;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Slightly longer for cards with hover-lift so the shadow + transform
+   feel intentional rather than reactive. 220ms is the sweet spot —
+   long enough to read as "lift," short enough to not feel sluggish. */
+[data-card-hover] {
+  transition-property: transform, box-shadow, border-color, background-color;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Universal hover-transition safety net — any element with a Tailwind
+   `hover:` utility on bg/text/border/shadow/opacity gets the default
+   smooth transition automatically. Catches div/span/li/etc. that have
+   hover effects but no explicit `transition-*` class (button/link/etc.
+   already pick up their own rule above). Property list mirrors the
+   element-level baseline so behavior stays consistent. */
+[class*="hover\:bg-"],
+[class*="hover\:text-"],
+[class*="hover\:border-"],
+[class*="hover\:shadow-"],
+[class*="hover\:opacity-"],
+[class*="hover\:from-"],
+[class*="hover\:to-"] {
+  transition-property: background-color, border-color, color, box-shadow,
+                       transform, opacity, filter;
+  transition-duration: var(--default-transition-duration);
+  transition-timing-function: var(--default-transition-timing-function);
+}
+
+/* Reduced motion override */
+@media (prefers-reduced-motion: reduce) {
+  button, a, input, select, textarea,
+  [role="button"], [role="link"], [role="tab"], [role="switch"],
+  [data-card-hover] {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* Input base — light style.
+   Wrapped inputs ([data-input-shell] > input) opt out of the default
+   border and background so the wrapper owns the chrome and the inner
+   input doesn't paint a second border on top of it. */
 input, select, textarea {
-  background: var(--muted);
-  border: 1px solid var(--border);
-  color: var(--foreground);
+  background: var(--white-0);
+  border: 1px solid var(--border-sub);
+  color: var(--text-strong);
+}
+[data-input-shell] input,
+[data-input-shell] select,
+[data-input-shell] textarea {
+  border: 0;
+  background: transparent;
 }
 
-/* Input focus — white border + white glow at 20% */
-input:focus, select:focus, textarea:focus {
-  border-color: rgba(255, 255, 255, 0.5);
+/* Default focus ring for bare inputs only. Wrapped inputs (those inside
+   a [data-input-shell] wrapper) opt out so the wrapper's own ring is the
+   only one that shows — no double-ring conflict. */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary-base);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px var(--primary-alpha-16);
+}
+[data-input-shell] input:focus,
+[data-input-shell] select:focus,
+[data-input-shell] textarea:focus {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 input::placeholder, textarea::placeholder {
-  color: var(--muted-foreground);
+  color: var(--text-soft);
+}
+
+/* Reset auto-fill background on inputs */
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 30px var(--white-0) inset;
+  -webkit-text-fill-color: var(--text-strong);
+}
+
+/* Selection */
+::selection {
+  background: var(--primary-alpha-24);
+  color: var(--text-strong);
+}
+
+/* ─── react-day-picker → Aegis / AlignUI theme ────────────────────────
+   Light surface, Geist Sans numbers, orange-tinted range. All blue
+   defaults from react-day-picker (accent, focus outlines, nav buttons)
+   are explicitly overridden to brand orange or neutral. */
+.aegis-daypicker {
+  --rdp-cell-size: 34px;
+  --rdp-accent-color: var(--primary-base);
+  --rdp-accent-background-color: var(--primary-alpha-10);
+  --rdp-background-color: transparent;
+  --rdp-day_button-border-radius: 7px;
+  --rdp-day_button-height: 30px;
+  --rdp-day_button-width: 30px;
+  --rdp-day-height: 34px;
+  --rdp-day-width: 34px;
+  --rdp-selected-border: none;
+  --rdp-outline: 2px solid var(--primary-alpha-24);
+  --rdp-outline-selected: 2px solid var(--primary-alpha-24);
+  --rdp-range_middle-background-color: var(--primary-alpha-10);
+  --rdp-range_middle-color: var(--neutral-strong-950);
+  --rdp-range_start-background: var(--primary-base);
+  --rdp-range_start-color: #fff;
+  --rdp-range_end-background: var(--primary-base);
+  --rdp-range_end-color: #fff;
+  --rdp-today-color: var(--primary-base);
+
+  /* OS / browser accent-color overrides any residual blue */
+  accent-color: var(--primary-base);
+
+  font-family: var(--font-geist-sans), sans-serif;
+  color: var(--neutral-strong-950);
+}
+.aegis-daypicker .rdp-months {
+  gap: 16px;
+  width: auto;
+}
+.aegis-daypicker .rdp-month_caption {
+  padding: 0 4px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--neutral-strong-950);
+}
+.aegis-daypicker .rdp-nav button,
+.aegis-daypicker .rdp-button_previous,
+.aegis-daypicker .rdp-button_next {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--neutral-sub-600);
+  background: transparent;
+}
+.aegis-daypicker .rdp-nav button:hover,
+.aegis-daypicker .rdp-button_previous:hover,
+.aegis-daypicker .rdp-button_next:hover {
+  background: var(--neutral-weak-50);
+  color: var(--neutral-strong-950);
+}
+.aegis-daypicker .rdp-button_previous svg,
+.aegis-daypicker .rdp-button_next svg,
+.aegis-daypicker .rdp-chevron {
+  fill: currentColor;
+  color: currentColor;
+}
+/* Kill any residual focus-ring blue on day buttons / nav buttons */
+.aegis-daypicker .rdp-day_button:focus-visible,
+.aegis-daypicker .rdp-button_previous:focus-visible,
+.aegis-daypicker .rdp-button_next:focus-visible {
+  outline: 2px solid var(--primary-alpha-24);
+  outline-offset: 1px;
+}
+/* No outline on selected days — the orange fill is enough */
+.aegis-daypicker .rdp-selected .rdp-day_button,
+.aegis-daypicker .rdp-range_start .rdp-day_button,
+.aegis-daypicker .rdp-range_end .rdp-day_button {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+.aegis-daypicker .rdp-weekdays {
+  color: var(--neutral-soft-400);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.aegis-daypicker .rdp-day {
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--neutral-strong-950);
+}
+.aegis-daypicker .rdp-day_button {
+  border-radius: 7px;
+}
+.aegis-daypicker .rdp-day_button:hover {
+  background: var(--neutral-weak-50);
+}
+.aegis-daypicker .rdp-outside .rdp-day_button {
+  color: var(--neutral-soft-400);
+}
+.aegis-daypicker .rdp-today .rdp-day_button {
+  color: var(--primary-base);
+  font-weight: 700;
+}
+.aegis-daypicker .rdp-selected .rdp-day_button {
+  background: var(--primary-base);
+  color: #fff;
+}
+.aegis-daypicker .rdp-range_middle .rdp-day_button {
+  background: var(--primary-alpha-10);
+  color: var(--neutral-strong-950);
+  border-radius: 0;
+}
+.aegis-daypicker .rdp-range_start .rdp-day_button {
+  background: var(--primary-base);
+  color: #fff;
+  border-radius: 7px 0 0 7px;
+}
+.aegis-daypicker .rdp-range_end .rdp-day_button {
+  background: var(--primary-base);
+  color: #fff;
+  border-radius: 0 7px 7px 0;
+}
+.aegis-daypicker .rdp-range_start.rdp-range_end .rdp-day_button {
+  border-radius: 7px;
+}
+
+/* ─── react-day-picker dark-mode overrides ──────────────────────────
+   The base .aegis-daypicker block above defines light-mode rdp CSS
+   variables (orange-tinted ranges, neutral hovers, etc.). In dark
+   themes the BACKGROUND tokens flip automatically (via our root
+   variable overrides), but rdp's own `--rdp-*` variables don't — so
+   today-highlight, range-middle, and outside-month days render with
+   broken contrast. Re-set them here for both dark themes.
+   ───────────────────────────────────────────────────────────────── */
+[data-theme="dark"] .aegis-daypicker {
+  /* Range middle wash darkens — alpha increases so the orange tint
+     reads against near-black surface. */
+  --rdp-range_middle-background-color: rgba(250, 115, 25, 0.18);
+  --rdp-range_middle-color: var(--neutral-strong-950);
+  /* Today text uses brand orange — already pops on dark, no change */
+  --rdp-today-color: var(--primary-base);
+  color: var(--neutral-strong-950);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-month_caption,
+[data-theme="dark"] .aegis-daypicker .rdp-day {
+  color: var(--neutral-strong-950);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-weekdays {
+  color: var(--neutral-soft-400);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-outside .rdp-day_button {
+  color: var(--neutral-soft-400);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-nav button,
+[data-theme="dark"] .aegis-daypicker .rdp-button_previous,
+[data-theme="dark"] .aegis-daypicker .rdp-button_next {
+  color: var(--neutral-sub-600);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-nav button:hover,
+[data-theme="dark"] .aegis-daypicker .rdp-button_previous:hover,
+[data-theme="dark"] .aegis-daypicker .rdp-button_next:hover {
+  background: var(--neutral-weak-50);
+  color: var(--neutral-strong-950);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-day_button:hover {
+  background: var(--neutral-weak-50);
+}
+[data-theme="dark"] .aegis-daypicker .rdp-range_middle .rdp-day_button {
+  /* Bumped from 0.18 → 0.32 alpha. The previous tint was too whisper-
+     thin to read clearly as "part of the selection" — bumping makes
+     the in-between days noticeably orange-tinted while still sitting
+     visibly below the solid-orange endpoint days. */
+  background: rgba(250, 115, 25, 0.32);
+  color: var(--neutral-strong-950);
+}
+/* Selected day — solid orange feels loud on near-black. Drop to ~45%
+   alpha so the highlight sits inside the dark surface instead of
+   floating on top of it. Range start/end keep their solid fill
+   (those are the obvious selection edges); only the standalone
+   selected day softens. */
+[data-theme="dark"] .aegis-daypicker .rdp-selected:not(.rdp-range_start):not(.rdp-range_end) .rdp-day_button {
+  background: rgba(250, 115, 25, 0.45);
+  color: var(--neutral-strong-950);
+}
+
+/* Table row hover keeps the orange tint in BOTH modes — Tailwind's
+   `hover:bg-[var(--primary-lighter)]/60` on the TR provides it.
+   In dark, `--primary-lighter` is rgba(250, 115, 25, 0.14); with the
+   /60 modifier the effective fill is a subtle orange wash that
+   matches the expanded-state gradient (which also uses
+   `--primary-lighter`). One affordance, one color family. */
+
+/* ─── Tool logos: dark-mode inversion ────────────────────────────────
+   Some tool logos ship as monochromatic dark PNGs and disappear
+   against near-black surfaces. Invert them in dark; colored logos
+   (VS Code blue, Claude orange, Copilot gradient, Replit orange)
+   stay untouched. Add new tool IDs to this list as needed.
+   The data-tool-id attribute is set in ToolLogo.tsx. */
+[data-theme="dark"] img[data-tool-id="cursor"],
+[data-theme="dark"] img[data-tool-id="openai"],
+[data-theme="dark"] img[data-tool-id="windsurf"],
+[data-theme="dark"] img[data-tool-id="aider"],
+[data-theme="dark"] img[data-tool-id="devin"] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Sidebar collapse — width-var driven
+   ─────────────────────────────────────────────────────────────────
+   When [data-sidebar-collapsed] is set on <html>, --sidebar-w flips
+   from 220px to 56px and the rail animates. Components mark elements
+   that should hide-when-collapsed with `data-sidebar-hide` and elements
+   that should center-when-collapsed with `data-sidebar-center`.
+
+   Motion strategy: width animates over 200ms; labels fade out FAST
+   (100ms) so they're gone before the width hits them. On expand,
+   width opens first, then labels fade in (120ms delay). This avoids
+   the "snapped-cut" feel where text gets clipped mid-animation.
+   ───────────────────────────────────────────────────────────────── */
+[data-sidebar-collapsed] {
+  --sidebar-w: 56px;
+}
+
+/* Anything tagged `data-sidebar-hide` is removed from layout when the
+   rail is collapsed. We use `display: none` instead of `opacity: 0` so
+   the elements don't keep claiming flex/box space — without this the
+   logo would push the toggle off-screen, the user identity column
+   would shove the avatar off-center, and group headers would leave
+   ghost vertical gaps. The width transition of the parent sidebar is
+   the primary motion signal; label/text disappearance is instant.
+   (Same snap pattern as Linear, Cursor, Notion.) */
+[data-sidebar-collapsed] [data-sidebar-hide] {
+  display: none;
+}
+
+/* Nav rows center their icon when collapsed.
+   Default (expanded): icon + label inline → justify-start, gap-2.
+   Collapsed: icon centered, no label → justify-center, gap-0. */
+[data-sidebar-collapsed] [data-sidebar-center] {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* When collapsed, nav-row links become 32×32 squares centered in the
+   rail. Without this, links span the full nav inner area (~40px wide)
+   so the active-state pill / hover pill is a wide rectangle that looks
+   visually loose. Square pills line up perfectly with the icon's
+   bounding box — much tighter, IDE-like rhythm (Linear / Cursor pattern).
+
+   `nav` scope so brand row + user row aren't affected. */
+[data-sidebar-collapsed] nav [data-sidebar-center] {
+  width: 32px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* User-row avatar gets the same square wrapper for visual consistency
+   with the nav squares. The user-row inner flex is what carries
+   data-sidebar-center; we use a sibling selector so this only kicks
+   in on the user row (which lives directly under .border-t). */
+[data-sidebar-collapsed] .border-t > [data-sidebar-center] {
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0;
+}
+
+/* Group spacing when collapsed. Group LABELS use `display: none` which
+   removes their `pt-3 pb-1` padding (16px total of vertical rhythm
+   between groups). Without this margin, consecutive groups would
+   sit ~2px apart — no visual separation. 12px matches the loose
+   IDE feel of Linear/Cursor's collapsed sidebars (reference image 3). */
+[data-sidebar-collapsed] nav > div + div {
+  margin-top: 12px;
+}
+
+/* Nav top padding when collapsed. With group labels hidden, recreate
+   the gap between brand row and first icon. 12px matches the expanded
+   state's first-group `pt-3` so the icons start at the same y-position
+   regardless of collapse state. */
+[data-sidebar-collapsed] nav {
+  padding-top: 12px;
+}
+
+/* Bigger icons in the collapsed rail. Expanded nav rows pair a 14px
+   icon with a label; in the icon-only rail, 14px feels undersized
+   relative to the 32×32 hit target. 16px is a comfortable bump that
+   stays visually balanced inside the square. Scoped to `nav` so brand
+   toggle (already 16px) and user-row avatar (26px) aren't affected. */
+[data-sidebar-collapsed] nav svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* (Toggle chevron is now a conditionally-rendered SVG path in
+   Sidebar.tsx — no CSS rotation needed. The panel-divider portion of
+   the icon stays anchored to the visual "left side" regardless of
+   state, which a 180° whole-icon rotation couldn't achieve.) */
+
+/* Live status dot — slow pulse halo */
+@keyframes aegis-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 0.55; }
+  50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.0; }
+}
+.aegis-live-dot {
+  position: relative;
+}
+.aegis-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: aegis-pulse 1.8s ease-out infinite;
+}
+
+/* Skeleton shimmer — used by <Skeleton> in components/ui/Skeleton.tsx.
+   The skeleton's ::after pseudo-element holds a horizontal gradient and
+   we translate it L→R every 1.6s. Researched from Mercury / Nextdoor —
+   both use ~1.2-1.6s linear loops with a soft shimmer peak. */
+@keyframes aegis-skeleton-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%);  }
 }

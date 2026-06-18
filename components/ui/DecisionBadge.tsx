@@ -1,36 +1,67 @@
 'use client';
 
-const styles: Record<string, { bg: string; text: string; label: string }> = {
-  ALLOW: { bg: 'bg-success/10', text: 'text-success', label: 'Allow' },
-  DENY: { bg: 'bg-destructive/10', text: 'text-destructive', label: 'Deny' },
-  REWRITE: { bg: 'bg-amber-500/10', text: 'text-amber-500', label: 'Rewrite' },
-  REQUIRE_APPROVAL: { bg: 'bg-foreground/8', text: 'text-foreground/70', label: 'Approval' },
-  ALLOW_ERROR: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Error' },
-  PENDING: { bg: 'bg-amber-500/10', text: 'text-amber-600', label: 'Pending' },
-  APPROVED: { bg: 'bg-success/10', text: 'text-success', label: 'Approved' },
-  REJECTED: { bg: 'bg-destructive/10', text: 'text-destructive', label: 'Rejected' },
+import { Badge, type BadgeTone } from './Badge';
+
+type DecisionStyle = { tone: BadgeTone; label: string };
+
+const STYLES: Record<string, DecisionStyle> = {
+  ALLOW:            { tone: 'success', label: 'ALLOW' },
+  DENY:             { tone: 'error',   label: 'DENY' },
+  REWRITE:          { tone: 'feature', label: 'REWRITE' },
+  REQUIRE_APPROVAL: { tone: 'warning', label: 'APPROVAL' },
+  PENDING:          { tone: 'warning', label: 'PENDING' },
+  APPROVED:         { tone: 'success', label: 'APPROVED' },
+  REJECTED:         { tone: 'error',   label: 'DENIED' },
+  DENIED:           { tone: 'error',   label: 'DENIED' },
+  ERROR:            { tone: 'neutral', label: 'ERROR' },
 };
 
-function getStyle(decision: string) {
-  const upper = decision?.toUpperCase() || '';
-  if (styles[upper]) return styles[upper];
-  if (upper.includes('APPROVAL')) return styles.REQUIRE_APPROVAL;
-  if (upper.includes('ERROR')) return styles.ALLOW_ERROR;
-  return { bg: 'bg-muted', text: 'text-muted-foreground', label: decision || 'Unknown' };
+function resolve(decision: string): DecisionStyle {
+  const upper = (decision ?? '').toUpperCase();
+  if (STYLES[upper]) return STYLES[upper];
+  if (upper.includes('APPROVAL')) return STYLES.REQUIRE_APPROVAL;
+  if (upper.includes('ERROR')) return STYLES.ERROR;
+  if (upper.includes('REWRITE')) return STYLES.REWRITE;
+  return { tone: 'neutral', label: upper || 'UNKNOWN' };
 }
 
 interface DecisionBadgeProps {
   decision: string;
+  /** kept for back-compat with existing call sites; size is fixed per spec. */
   size?: 'sm' | 'default';
+  className?: string;
 }
 
-export default function DecisionBadge({ decision, size = 'default' }: DecisionBadgeProps) {
-  const style = getStyle(decision);
-  const sizeClass = size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs';
-
+export default function DecisionBadge({ decision, className }: DecisionBadgeProps) {
+  const style = resolve(decision);
   return (
-    <span className={`inline-block rounded font-medium ${style.bg} ${style.text} ${sizeClass}`}>
+    <Badge tone={style.tone} uppercase className={className}>
       {style.label}
-    </span>
+    </Badge>
   );
+}
+
+/** Map a decision string to one of the Card accent severity tones. */
+export function decisionAccent(decision: string):
+  | 'success'
+  | 'error'
+  | 'warning'
+  | 'feature'
+  | 'neutral' {
+  const upper = (decision ?? '').toUpperCase();
+  if (upper === 'ALLOW') return 'success';
+  if (upper === 'DENY' || upper === 'REJECTED' || upper === 'DENIED') return 'error';
+  if (upper === 'REWRITE') return 'feature';
+  if (upper.includes('APPROVAL') || upper === 'PENDING') return 'warning';
+  return 'neutral';
+}
+
+/** Map a decision string to its semantic color CSS variable. */
+export function decisionColor(decision: string): string {
+  const upper = (decision ?? '').toUpperCase();
+  if (upper === 'ALLOW' || upper === 'APPROVED') return 'var(--success)';
+  if (upper === 'DENY' || upper === 'REJECTED' || upper === 'DENIED') return 'var(--error)';
+  if (upper === 'REWRITE') return 'var(--feature)';
+  if (upper.includes('APPROVAL') || upper === 'PENDING') return 'var(--warning)';
+  return 'var(--neutral-soft-400)';
 }

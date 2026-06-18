@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aegis email templates - preview</title>
+  <style>
+    :root {
+      --bg: #fafafa;
+      --panel: #ffffff;
+      --stroke: #ececec;
+      --text: #171717;
+      --sub: #525252;
+      --soft: #a3a3a3;
+      --primary: #fa7319;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --panel: #161616;
+        --stroke: #262626;
+        --text: #fafafa;
+        --sub: #d4d4d4;
+        --soft: #737373;
+      }
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--stroke);
+      flex-wrap: wrap;
+    }
+    .toolbar h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .toolbar h1 small {
+      display: inline-block;
+      margin-left: 6px;
+      font-weight: 400;
+      color: var(--soft);
+    }
+    .tabs {
+      display: flex;
+      gap: 2px;
+      padding: 3px;
+      background: var(--bg);
+      border-radius: 8px;
+      border: 1px solid var(--stroke);
+    }
+    .tab {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      padding: 6px 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      color: var(--sub);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[data-active="true"] {
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(23,23,23,0.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      .tab[data-active="true"] {
+        background: #1f1f1f;
+        box-shadow: 0 0 0 1px var(--stroke);
+      }
+    }
+    .right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 16px;
+      overflow: hidden;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .stage[data-mode="light"] { grid-template-columns: 1fr; }
+    .stage[data-mode="dark"]  { grid-template-columns: 1fr; }
+    .stage[data-mode="split"] { grid-template-columns: 1fr 1fr; }
+    .pane {
+      position: relative;
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .pane[data-pane="light"] { background: #fafafa; color-scheme: light; }
+    .pane[data-pane="dark"]  { background: #0a0a0a; color-scheme: dark; }
+    .pane-label {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      z-index: 10;
+      padding: 2px 8px;
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--soft);
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--stroke);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .pane[data-pane="dark"] .pane-label {
+      background: rgba(15,15,15,0.92);
+      color: #a3a3a3;
+      border-color: #262626;
+    }
+    .pane iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      /* color-scheme on the iframe propagates to its inner doc so
+         the email's bare `<body>` background picks up the right
+         tone for the chrome around the inline content. */
+    }
+    .pane[data-pane="light"] iframe { color-scheme: light; }
+    .pane[data-pane="dark"]  iframe { color-scheme: dark; }
+    .stage[data-mode="light"] .pane[data-pane="dark"] { display: none; }
+    .stage[data-mode="dark"]  .pane[data-pane="light"] { display: none; }
+    @media (max-width: 900px) {
+      .stage { grid-template-columns: 1fr !important; }
+      .pane { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <h1>Email templates <small>preview</small></h1>
+      <div class="tabs" role="tablist">
+        <button class="tab" data-template="verify-email" data-active="true">Verify</button>
+        <button class="tab" data-template="reset-password">Reset password</button>
+        <button class="tab" data-template="welcome">Welcome</button>
+        <button class="tab" data-template="approval-request">Approval</button>
+        <button class="tab" data-template="invite-room">Invite</button>
+      </div>
+      <div class="right">
+        <div class="tabs" role="tablist" aria-label="Color mode">
+          <button class="tab mode" data-mode="split" data-active="true">Split</button>
+          <button class="tab mode" data-mode="light">Light</button>
+          <button class="tab mode" data-mode="dark">Dark</button>
+        </div>
+      </div>
+    </header>
+    <section class="stage" data-mode="split">
+      <div class="pane" data-pane="light">
+        <span class="pane-label">Light</span>
+        <iframe id="iframe-light" title="Light preview" src="verify-email.filled.html"></iframe>
+      </div>
+      <div class="pane" data-pane="dark">
+        <span class="pane-label">Dark</span>
+        <iframe id="iframe-dark" title="Dark preview" src="verify-email.filled-dark.html"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    /**
+     * Direct-src iframe approach - no fetch(), no CORS. Each
+     * iframe loads its filled HTML directly. The dark variant
+     * is pre-baked by _render-preview.mjs with a force-dark
+     * stylesheet appended, so we don't have to inject CSS at
+     * runtime.
+     *
+     * Template tabs swap both iframes' src. Mode tabs toggle
+     * which pane is visible (split / light-only / dark-only).
+     */
+    const tabs = document.querySelectorAll('.tabs .tab:not(.mode)');
+    const modeTabs = document.querySelectorAll('.tabs .tab.mode');
+    const iframeLight = document.getElementById('iframe-light');
+    const iframeDark = document.getElementById('iframe-dark');
+    const stage = document.querySelector('.stage');
+
+    tabs.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        tabs.forEach((b) => b.setAttribute('data-active', 'false'));
+        btn.setAttribute('data-active', 'true');
+        const tpl = btn.dataset.template;
+        iframeLight.src = `${tpl}.filled.html`;
+        iframeDark.src = `${tpl}.filled-dark.html`;
+      });
+    });
+
+    modeTabs.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        modeTabs.forEach((b) => b.setAttribute('data-active', 'false'));
+        btn.setAttribute('data-active', 'true');
+        stage.setAttribute('data-mode', btn.dataset.mode);
+      });
+    });
+  </script>
+</body>
+</html>
